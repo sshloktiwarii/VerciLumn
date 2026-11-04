@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             set: { UserDefaults.standard.set($0, forKey: "vercilumn_glow_sensitivity") }
         )
         let backdropBinding = Binding(
-            get: { BackdropMode(rawValue: UserDefaults.standard.string(forKey: "vercilumn_backdrop_mode") ?? "") ?? .oledBlack },
+            get: { BackdropMode(rawValue: UserDefaults.standard.string(forKey: "vercilumn_backdrop_mode") ?? "") ?? .particleCosmos },
             set: { UserDefaults.standard.set($0.rawValue, forKey: "vercilumn_backdrop_mode") }
         )
         let offsetBinding = Binding(
@@ -71,7 +71,7 @@ struct VerciLumnApp: App {
     @AppStorage("vercilumn_bezel_enabled") private var isBezelEnabled: Bool = true
     @AppStorage("vercilumn_glow_sensitivity") private var glowSensitivity: Double = 1.0
     @AppStorage("vercilumn_display_mode") private var storedDisplayMode: String = WindowDisplayMode.desktop.rawValue
-    @AppStorage("vercilumn_backdrop_mode") private var storedBackdropMode: String = BackdropMode.oledBlack.rawValue
+    @AppStorage("vercilumn_backdrop_mode") private var storedBackdropMode: String = BackdropMode.particleCosmos.rawValue
     @AppStorage("vercilumn_timing_offset") private var timingOffset: Double = 0.0
     
     private var currentStyleBinding: Binding<LyricStyle> {

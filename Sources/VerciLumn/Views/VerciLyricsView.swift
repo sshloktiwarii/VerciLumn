@@ -2,7 +2,7 @@ import SwiftUI
 
 public enum LyricStyle: String, CaseIterable, Identifiable {
     case verciReel = "Verci Kinetic Reel (Official)"
-    case standard = "Standard Stack"
+    case standard = "Standard Stack (Multi-Line)"
     case ship = "Ship (3D Perspective)"
     case fisheye = "Fisheye Lens"
     case visual = "Visual Mode"
@@ -34,7 +34,7 @@ public struct VerciLyricsView: View {
                     Image(systemName: "waveform.path")
                         .font(.system(size: 40))
                         .foregroundColor(.white.opacity(0.3))
-                    Text(lyrics.isLoading ? "Fetching time-synced lyrics..." : (playback.currentTrack.isPlaying ? "Instrumental or lyrics unavailable" : "Play music in Spotify or Apple Music"))
+                    Text(lyrics.isLoading ? "Fetching synchronized lyrics..." : (playback.currentTrack.isPlaying ? "Instrumental or lyrics unavailable" : "Play music in Spotify or Apple Music"))
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                 }
@@ -47,7 +47,7 @@ public struct VerciLyricsView: View {
                 case .ship:
                     shipPerspectiveView(lines: lines, activeIndex: activeLineIndex, currentTime: currentTime)
                 case .fisheye:
-                    fisheyeView(lines: lines, activeIndex: activeLineIndex, currentTime: currentTime)
+                    fisheyeLensView(lines: lines, activeIndex: activeLineIndex, currentTime: currentTime)
                 case .visual:
                     visualModeView(lines: lines, activeIndex: activeLineIndex, currentTime: currentTime)
                 }
@@ -58,13 +58,11 @@ public struct VerciLyricsView: View {
     
     // MARK: - Style 0: Verci Kinetic Reel (Matches verci-hero.mp4)
     private func verciKineticReelView(lines: [LyricLine], activeLineIdx: Int, currentTime: TimeInterval) -> some View {
-        // Flatten all words across nearby lines into a chronological word stream
         let allWords: [WordToken] = lines.flatMap { $0.words }
         guard !allWords.isEmpty else {
             return AnyView(EmptyView())
         }
         
-        // Find active word index via binary search
         var low = 0
         var high = allWords.count - 1
         var activeWordIdx = 0
@@ -84,170 +82,149 @@ public struct VerciLyricsView: View {
         let symbol = WordIconMapper.shared.symbol(for: currentWord.text)
         
         return AnyView(
-            VStack(spacing: 24) {
-                // 1. Previous Word (Receding upwards, smaller, dimmed)
+            VStack(spacing: 28) {
+                // Previous Word
                 if let prev = prevWord {
                     Text(prev.text)
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
-                        .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.45))
-                        .opacity(0.4)
-                        .scaleEffect(0.85)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.4))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 
-                // 2. Active Center Word (Giant, encased in sticker block with dynamic icon)
+                // Active Center Word
                 HStack(spacing: 16) {
                     if let icon = symbol {
                         Image(systemName: icon)
                             .font(.system(size: 48, weight: .black))
                             .foregroundColor(palette.currentPalette.highlightAccent)
-                            .transition(.scale.combined(with: .opacity))
                     }
                     
                     Text(currentWord.text)
-                        .font(.system(size: 84, weight: .black, design: .rounded))
+                        .font(.system(size: 76, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 10)
                         .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .fill(palette.currentPalette.highlightAccent.opacity(0.85))
-                                .shadow(color: palette.currentPalette.highlightAccent.opacity(0.5), radius: 16, x: 0, y: 6)
+                                .shadow(color: palette.currentPalette.highlightAccent.opacity(0.55), radius: 18, x: 0, y: 6)
                         )
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
                 }
-                .scaleEffect(1.0)
                 .animation(.spring(response: 0.28, dampingFraction: 0.72), value: currentWord.id)
                 
-                // 3. Next Word (Approaching from bottom, dimmed)
+                // Next Word
                 if let next = nextWord {
                     HStack(spacing: 12) {
                         if let nextIcon = WordIconMapper.shared.symbol(for: next.text) {
                             Image(systemName: nextIcon)
-                                .font(.system(size: 26, weight: .bold))
+                                .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.3))
                         }
                         Text(next.text)
-                            .font(.system(size: 42, weight: .bold, design: .rounded))
-                            .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.5))
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.4))
                     }
-                    .opacity(0.4)
-                    .scaleEffect(0.85)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 }
             }
-            .animation(.easeInOut(duration: 0.22), value: activeWordIdx)
+            .animation(.easeInOut(duration: 0.2), value: activeWordIdx)
         )
     }
     
-    // MARK: - Style 1: Standard Stack
+    // MARK: - Style 1: Standard Stack (Clean, No Collisions)
     private func standardStackView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
-        VStack(alignment: .center, spacing: 20) {
+        VStack(spacing: 24) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 2), id: \.self) { idx in
                 let line = lines[idx]
                 let isActive = idx == activeIndex
                 
-                HStack(spacing: 8) {
-                    ForEach(line.words) { word in
-                        let isWordActive = isActive && (currentTime >= word.timestamp)
-                        Text(word.text)
-                            .font(.system(size: isActive ? 34 : 22, weight: isActive ? .black : .medium, design: .rounded))
-                            .foregroundColor(isWordActive ? palette.currentPalette.highlightAccent : (isActive ? .white : .white.opacity(0.35)))
-                            .shadow(color: isWordActive ? palette.currentPalette.highlightAccent.opacity(0.6) : .clear, radius: 10)
-                            .animation(.easeOut(duration: 0.15), value: isWordActive)
-                    }
-                }
-                .scaleEffect(isActive ? 1.05 : 0.95)
-                .opacity(isActive ? 1.0 : 0.4)
-                .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activeIndex)
+                Text(line.fullText)
+                    .font(.system(size: isActive ? 44 : 26, weight: isActive ? .heavy : .semibold, design: .rounded))
+                    .foregroundColor(isActive ? .white : .white.opacity(0.3))
+                    .shadow(color: isActive ? palette.currentPalette.highlightAccent.opacity(0.4) : .clear, radius: 12)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, 32)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.78), value: activeIndex)
             }
         }
     }
     
     // MARK: - Style 2: Ship (3D Perspective)
     private func shipPerspectiveView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
-        VStack(alignment: .center, spacing: 28) {
+        VStack(spacing: 26) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 3), id: \.self) { idx in
                 let line = lines[idx]
                 let distance = idx - activeIndex
                 let isActive = distance == 0
                 
-                HStack(spacing: 8) {
-                    ForEach(line.words) { word in
-                        let isWordActive = isActive && (currentTime >= word.timestamp)
-                        Text(word.text)
-                            .font(.system(size: 32, weight: isActive ? .heavy : .semibold, design: .rounded))
-                            .foregroundColor(isWordActive ? palette.currentPalette.highlightAccent : (isActive ? .white : .white.opacity(0.3)))
-                    }
-                }
-                .rotation3DEffect(
-                    .degrees(Double(distance) * -18),
-                    axis: (x: 1.0, y: 0.0, z: 0.0),
-                    anchor: .center,
-                    perspective: 0.6
-                )
-                .scaleEffect(max(0.6, 1.0 - (Double(distance) * 0.15)))
-                .offset(y: Double(distance) * 12)
-                .opacity(max(0.15, 1.0 - (abs(Double(distance)) * 0.3)))
-                .animation(.easeInOut(duration: 0.35), value: activeIndex)
+                Text(line.fullText)
+                    .font(.system(size: 38, weight: isActive ? .black : .semibold, design: .rounded))
+                    .foregroundColor(isActive ? palette.currentPalette.highlightAccent : .white.opacity(0.28))
+                    .rotation3DEffect(
+                        .degrees(Double(distance) * -16),
+                        axis: (x: 1.0, y: 0.0, z: 0.0),
+                        anchor: .center,
+                        perspective: 0.55
+                    )
+                    .opacity(max(0.15, 1.0 - (abs(Double(distance)) * 0.28)))
+                    .animation(.easeInOut(duration: 0.3), value: activeIndex)
             }
         }
     }
     
-    // MARK: - Style 3: Fisheye Lens
-    private func fisheyeView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
-        VStack(alignment: .center, spacing: 22) {
+    // MARK: - Style 3: Fisheye Lens (Smooth Contrast, No Horizontal Scale Collisions)
+    private func fisheyeLensView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
+        VStack(spacing: 22) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 2), id: \.self) { idx in
                 let line = lines[idx]
                 let isActive = idx == activeIndex
-                let activeWordIdx = lyrics.currentLyrics.activeWordIndex(in: idx, at: currentTime) ?? 0
                 
-                HStack(spacing: 10) {
-                    ForEach(Array(line.words.enumerated()), id: \.element.id) { (wIdx, word) in
-                        let isWordActive = isActive && (wIdx == activeWordIdx)
-                        let distFromCenter = abs(wIdx - activeWordIdx)
-                        let fisheyeScale = isActive ? max(1.0, 1.6 - (CGFloat(distFromCenter) * 0.22)) : 0.9
-                        
+                HStack(spacing: 8) {
+                    ForEach(line.words) { word in
+                        let isWordActive = isActive && (currentTime >= word.timestamp)
                         Text(word.text)
-                            .font(.system(size: 30, weight: isWordActive ? .black : .bold, design: .rounded))
+                            .font(.system(size: isActive ? (isWordActive ? 36 : 30) : 22, weight: isWordActive ? .black : (isActive ? .bold : .medium), design: .rounded))
                             .foregroundColor(isWordActive ? palette.currentPalette.highlightAccent : (isActive ? .white : .white.opacity(0.3)))
-                            .scaleEffect(fisheyeScale)
-                            .shadow(color: isWordActive ? palette.currentPalette.highlightAccent.opacity(0.7) : .clear, radius: 12)
-                            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: activeWordIdx)
+                            .shadow(color: isWordActive ? palette.currentPalette.highlightAccent.opacity(0.65) : .clear, radius: 10)
                     }
                 }
-                .opacity(isActive ? 1.0 : 0.4)
+                .opacity(isActive ? 1.0 : 0.35)
+                .animation(.spring(response: 0.25, dampingFraction: 0.75), value: activeIndex)
             }
         }
     }
     
     // MARK: - Style 4: Visual Mode
     private func visualModeView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
-        VStack(alignment: .center, spacing: 22) {
+        VStack(spacing: 24) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 2), id: \.self) { idx in
                 let line = lines[idx]
                 let isActive = idx == activeIndex
                 
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     ForEach(line.words) { word in
                         let isWordActive = isActive && (currentTime >= word.timestamp)
                         let symbol = WordIconMapper.shared.symbol(for: word.text)
                         
                         HStack(spacing: 4) {
                             Text(word.text)
-                                .font(.system(size: isActive ? 32 : 22, weight: isActive ? .black : .medium, design: .rounded))
+                                .font(.system(size: isActive ? (isWordActive ? 34 : 28) : 22, weight: isWordActive ? .black : (isActive ? .bold : .medium), design: .rounded))
                                 .foregroundColor(isWordActive ? palette.currentPalette.highlightAccent : (isActive ? .white : .white.opacity(0.35)))
                             
                             if let icon = symbol, isWordActive {
                                 Image(systemName: icon)
-                                    .font(.system(size: 24, weight: .bold))
+                                    .font(.system(size: 20, weight: .bold))
                                     .foregroundColor(palette.currentPalette.secondaryGlow)
-                                    .transition(.scale.combined(with: .opacity))
                             }
                         }
                     }
                 }
-                .scaleEffect(isActive ? 1.05 : 0.95)
-                .opacity(isActive ? 1.0 : 0.4)
+                .opacity(isActive ? 1.0 : 0.35)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: activeIndex)
             }
         }

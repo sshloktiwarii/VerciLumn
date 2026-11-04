@@ -1,6 +1,7 @@
 import SwiftUI
 
 public enum BackdropMode: String, CaseIterable, Identifiable {
+    case particleCosmos = "Audio-Reactive Particle Cosmos"
     case oledBlack = "Cinematic Dark (Verci Style)"
     case ambientAurora = "Fluid Ambient Aurora"
     case transparent = "Transparent Pass-Through"
@@ -36,7 +37,7 @@ public struct RootOverlayView: View {
     
     public var body: some View {
         ZStack {
-            // 1. Dynamic Mood Backdrop (Prevents bright wallpaper from showing through)
+            // 1. Dynamic Canvas Backdrop
             backdropLayer
                 .ignoresSafeArea()
             
@@ -46,7 +47,7 @@ public struct RootOverlayView: View {
                 glowIntensityMultiplier: CGFloat(glowSensitivity)
             )
             
-            // 3. Centered Synced Word Lyrics (Verci Kinetic Reel by default)
+            // 3. Centered Synced Word Lyrics (No Collisions)
             VStack {
                 Spacer()
                 VerciLyricsView(style: currentStyle, timingOffset: timingOffset)
@@ -83,6 +84,10 @@ public struct RootOverlayView: View {
     @ViewBuilder
     private var backdropLayer: some View {
         switch backdropMode {
+        case .particleCosmos:
+            // 60fps dynamic audio-reactive particle universe & shockwaves
+            ParticleCosmosView()
+            
         case .oledBlack:
             // Deep OLED black with subtle soft radial ambient glow
             ZStack {
