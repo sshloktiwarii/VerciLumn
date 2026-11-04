@@ -280,3 +280,4 @@ public final class WordSemanticEngine: ObservableObject {
         for w in celestialWords { lexicon[w] = .celestial }
     }
 }
+

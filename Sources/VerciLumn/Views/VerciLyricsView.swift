@@ -140,31 +140,7 @@ public struct VerciLyricsView: View {
     
     // MARK: - Style 2: 3D Holographic Vinyl Turntable Mode
     private func turntableModeView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
-        let currentLine = (!lines.isEmpty && activeIndex < lines.count) ? lines[activeIndex].fullText : playback.currentTrack.title
-        let activeColor = theme.activePalette.highlightAccent
-        
-        return VStack(spacing: 36 * textScale) {
-            // Interactive 33 RPM Grooved Vinyl with Tonearm
-            VinylTurntableView(size: min(440 * textScale, 560))
-            
-            // Active Sung Lyric Line Caption below vinyl
-            VStack(spacing: 8) {
-                Text(currentLine)
-                    .font(.system(size: 32 * textScale, weight: .black, design: theme.currentTypography.design))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .shadow(color: activeColor.opacity(0.6), radius: 18)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: activeIndex)
-                
-                if !lyrics.currentLyrics.source.isEmpty {
-                    Text("SYNCED VIA \(lyrics.currentLyrics.source.uppercased())")
-                        .font(.system(size: 10 * textScale, weight: .bold, design: .monospaced))
-                        .foregroundColor(activeColor.opacity(0.5))
-                        .tracking(2)
-                }
-            }
-        }
+        VinylTurntableView(size: min(520 * textScale, 680))
     }
     
     // MARK: - Style 3: Neon Horizon (3D Perspective)

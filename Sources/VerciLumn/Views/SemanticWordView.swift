@@ -251,3 +251,4 @@ public struct SemanticWordView: View {
         .allowsHitTesting(false)
     }
 }
+

@@ -92,3 +92,4 @@ public struct AmbientFloorBarsView: View {
         .allowsHitTesting(false)
     }
 }
+
