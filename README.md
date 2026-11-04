@@ -1,118 +1,150 @@
-# VerciLumn Engine (Unified macOS Audio Visualizer & Synced Lyrics)
+# VerciLumn
 
-**VerciLumn** is a lightweight, zero-cost, menu-bar-only macOS background application (`LSUIElement = true`) unifying real-time, word-by-word lock screen lyrics (**Verci**) and beat-reactive bezel rim lighting with a frosted glass media player card (**Lumn**).
+A lightweight macOS menu bar utility (`LSUIElement = true`) providing real-time, word-synchronized lyrics, audio-reactive visualizers, and interactive playback controls across both the desktop and the macOS lock screen.
 
----
-
-## 🌟 Features
-
-- **Word-by-Word Synchronized Lyrics:** Fetches time-synced ELRC and standard lyrics via public keyless LRCLIB API (`https://lrclib.net`), with $O(\log N)$ binary search timing lookup.
-- **Multi-Player Support:** Intercepts track metadata, artwork, and playback position from **Spotify** and **Apple Music** with local $T_{\text{current}} = T_{\text{sampled}} + \Delta t$ timestamp compensation.
-- **4 Visual Lyric Styles:**
-  1. **Standard Stack:** Clean vertical word stack with high-contrast active word highlighting.
-  2. **Ship (3D Perspective):** Word stack rendered along a 3D Z-axis depth vector drifting backward into space.
-  3. **Fisheye Lens:** Real-time convex spherical Metal shader distortion centered around the active word.
-  4. **Visual Mode:** Real-time semantic mapping of sung words to native SF Symbols and dynamic emojis.
-- **Lumn Beat-Reactive Bezel Glow:** Non-invasive system audio capture via `ScreenCaptureKit` and Accelerate `vDSP` RMS/FFT bass energy analysis ($20\text{Hz}-150\text{Hz}$) pulsing display borders.
-- **Frosted Glass Media Card:** Lock screen card rendered in `.ultraThinMaterial` displaying high-res album artwork, track title, artist, and playback progress.
-- **Dynamic Palette Extraction:** CoreImage `CIKMeans` color clustering extracting primary, secondary, and accent colors from album art with W3C $>4.5:1$ contrast guarantees.
-- **Lock Screen Superiority:** AppKit `NSPanel` elevated to `CGWindowLevelForKey(.screenSaverWindow)` so overlays stay visible on the macOS lock screen.
-- **Display Awake Assertion:** Prevents system idle display sleep during active media playback via `IOKit` `IOPMAssertion`.
+Supports **Spotify** and **Apple Music** with zero account configuration.
 
 ---
 
-## 🛠 Project Structure
+## Capabilities
+
+### Word-Synchronized Lyrics & Interactive Navigation
+- **Word-Level Sync:** Ingests synchronized ELRC and standard LRC lyrics from LRCLIB with automated fallback to NetEase Cloud Music.
+- **Microsecond Binary Search:** Fast $O(\log N)$ timestamp resolution locates active words and lines with zero frame stutter.
+- **Two-Line Interactive Reel:** Click the previous lyric line to jump back, or click the next line to skip ahead. Word tokens support tap-to-seek directly to vocal markers.
+- **Dynamic Delta Pacing:** On tracks with line-level timestamps, inter-line deltas interpolate natural word progress without artificial fixed steps.
+- **Offline Memory Cache:** `NSCache` retains parsed lyric models for repeated tracks without redundant network round-trips.
+
+### Interactive Transport Dock
+- **Tactile Scrub Bar:** Acrylic glass capsule with draggable seek timeline, elapsed and remaining duration counters.
+- **Direct Rewind & Fast-Forward:** Instant `-5s` and `+5s` seek buttons communicating with Spotify and Apple Music via AppleScript.
+- **Non-Overlapping Stage Layout:** Positioned cleanly at the bottom edge without colliding with audio waveforms or active lyrics.
+- **Coordinate-Aware Hit-Testing:** Transparent stage areas pass mouse events through to underlying applications; dock and lyric controls capture clicks with zero activation lag (`acceptsFirstMouse`).
+
+### Visual Backdrops & Audio Engines
+- **Hypnotic Geometric Zoom Tunnel:** Delta-time continuous phase integration (`ContinuousTunnelPhase`) driving 24 concentric regular octagons and inscribed diamond star lattices. The zoom rate reacts smoothly to song BPM, bass energy, and transient audio spikes over an opaque dark stage.
+- **Audio-Reactive Particle Cosmos:** 120-particle velocity field driven by 8-band FFT audio spectrum analysis.
+- **Pure Black (OLED):** True black canvas for distraction-free night listening.
+- **Transparent Pass-Through:** Minimalist heads-up display revealing your desktop wallpaper.
+- **Audio Processing:** Non-invasive system audio capture via `ScreenCaptureKit` and Accelerate `vDSP` FFT (Sub-Bass, Bass, Low-Mid, Mid, High-Mid, Presence, Brilliance, Air) with automatic rhythmic simulation fallback when recording permissions are absent.
+
+### Curated Color Palettes & Editorial Typography
+- **8 Color Themes:**
+  - *Album Reactive:* Dynamic palette extracted from cover art via CoreImage `CIKMeans` clustering with W3C contrast enforcement.
+  - *Black & White:* High-contrast monochrome for minimalist setups.
+  - *Rainbow Spectrum:* Prismatic multi-hue gradient.
+  - *Red Family:* Crimson, ruby, and warm scarlet.
+  - *Purple Family Soft:* Lavender, lilac, and violet.
+  - *Blue Family:* Electric cyan, cobalt, and deep ocean.
+  - *Green Family:* Mint, emerald, and sage.
+  - *Brown Family:* Caramel, bronze, and warm earth.
+- **4 Typography Styles:** SF Pro Rounded, New York Editorial Serif, Industrial Monospace, SF Pro Display.
+
+### Lock Screen & Stage Immersion
+- **Lock Screen Superiority:** Elevates to `CGShieldingWindowLevel()` on lock events (`com.apple.screenIsLocked`, `screensDidSleep`) so lyrics remain visible while your Mac is locked.
+- **Display Awake Assertion:** Prevents display sleep during active playback via IOKit `IOPMAssertionCreateWithName`.
+
+---
+
+## Global Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `⌘ + ⇧ + L` | Toggle Full Stage Immersion Overlay |
+| `⌘ + ⇧ + N` | Toggle Dynamic Notch Island |
+| `⌘ + ⌥ + →` | Cycle Lyric Animation Styles |
+| `⌘ + [` | Vocal Sync Timing Offset -50ms |
+| `⌘ + ]` | Vocal Sync Timing Offset +50ms |
+| `⌘ + ⇧ + Space` | Play / Pause Toggle |
+
+---
+
+## Project Structure
 
 ```
 ├── Package.swift                             # Swift 5.10+ package manifest (macOS 14+)
-├── Info.plist                                # LSUIElement & permission descriptions
-├── product_requirements_document.md          # PRD specification
-├── system_architecture_document.md           # Engineering architecture specification
-├── design_ui_specifications.md               # Visual design & Metal shader specification
-└── Sources/
-    └── VerciLumn/
-        ├── App/
-        │   └── VerciLumnApp.swift            # @main entry point & NSStatusItem menu bar
-        ├── Core/
-        │   ├── AudioBeatEngine.swift         # ScreenCaptureKit audio & vDSP beat FFT
-        │   ├── ColorPaletteManager.swift     # CIKMeans color clustering from album art
-        │   ├── DisplaySleepManager.swift     # IOKit display sleep prevention
-        │   ├── LyricsFetcher.swift           # LRCLIB client & ELRC word-sync parser
-        │   ├── PlaybackManager.swift         # AppleScript Spotify/Music bridge + interpolation
-        │   └── WordIconMapper.swift          # Lexicon mapping words to SF Symbols
-        ├── Rendering/
-        │   └── MetalShaderRenderer.swift     # Metal compute pipeline & runtime JIT compiler
-        ├── Shaders/
-        │   └── FisheyeShader.metal           # Fisheye lens distortion kernel
-        ├── Views/
-        │   ├── BezelGlowView.swift           # Display edge rim border & beat bloom
-        │   ├── LumnGlassWidgetView.swift     # Frosted acrylic now-playing card
-        │   ├── MenuBarView.swift             # Menu bar dropdown & controls
-        │   ├── RootOverlayView.swift         # Master overlay combining Bezel, Lyrics & Card
-        │   └── VerciLyricsView.swift         # 4-style synchronized lyrics presenter
-        └── Windows/
-            ├── LockScreenPanel.swift         # ScreenSaver-level borderless pass-through panel
-            └── OverlayWindowManager.swift     # Multi-display layout manager
+├── Info.plist                                # LSUIElement & permission declarations
+├── Sources/
+│   └── VerciLumn/
+│       ├── App/
+│       │   └── VerciLumnApp.swift            # NSApplicationDelegate & MenuBarExtra entry
+│       ├── Core/
+│       │   ├── AppSettings.swift             # Persistent UserDefaults settings store
+│       │   ├── AudioBeatEngine.swift         # ScreenCaptureKit audio stream & beat analyzer
+│       │   ├── AudioSpectrumEngine.swift     # Accelerate vDSP 8-band FFT spectrum processor
+│       │   ├── ColorPaletteManager.swift     # CIKMeans color extraction from album art
+│       │   ├── DisplaySleepManager.swift     # IOKit display sleep assertion manager
+│       │   ├── HotKeyManager.swift           # NSEvent global hotkeys & idle sleep detector
+│       │   ├── LyricsFetcher.swift           # LRCLIB & NetEase API fetcher & LRC parser
+│       │   ├── PlaybackManager.swift         # Spotify & Music state poller and transport
+│       │   ├── ThemeManager.swift            # Color presets & typography selection
+│       │   └── WordSemanticEngine.swift      # Lexicon sentiment & visual effect resolver
+│       ├── Shaders/
+│       │   └── FisheyeShader.metal           # Metal compute & stitchable distortion shader
+│       ├── Views/
+│       │   ├── BezelGlowView.swift           # Display rim glow stroke view
+│       │   ├── DynamicNotchHUDView.swift     # MacBook camera notch expanding island
+│       │   ├── InfiniteZoomTunnelView.swift  # BPM-reactive geometric tunnel canvas
+│       │   ├── InteractivePlaybackScrubberView.swift # Timeline scrub bar & seek buttons
+│       │   ├── LiquidWaveformView.swift      # Harmonic ripple audio rings
+│       │   ├── LumnGlassWidgetView.swift     # Frosted glass now-playing card
+│       │   ├── MenuBarView.swift             # Native macOS dropdown settings popover
+│       │   ├── ParticleCosmosView.swift      # Audio-reactive floating particle field
+│       │   ├── RootOverlayView.swift         # Full-screen hierarchy & backdrop orchestrator
+│       │   ├── SemanticWordView.swift        # Active singing word styling & highlight
+│       │   ├── VerciLyricsView.swift         # Synced lyrics presentation styles
+│       │   └── VinylTurntableView.swift      # 3D grooved vinyl record with tonearm
+│       └── Windows/
+│           ├── DynamicNotchPanel.swift       # Notch panel positioning & lifecycle
+│           ├── LockScreenPanel.swift         # Full-screen borderless window & hit-test routing
+│           └── OverlayWindowManager.swift    # Multi-monitor management & lock screen coordinator
+└── Tests/
+    └── VerciLumnTests/
+        └── VerciLumnTests.swift              # Unit test suite (timing, ELRC, settings)
 ```
 
 ---
 
-## 🚀 How to Run in Xcode (Step-by-Step)
+## Build & Run
 
-### Option 1: Open Directly as Swift Package (Fastest)
+### Prerequisites
+- macOS 14.0 (Sonoma) or macOS 15.0+ (Sequoia)
+- Xcode 15.0+ / Swift 5.10+
+- Apple Silicon (M1/M2/M3/M4) or Intel Mac
 
-1. **Launch Xcode**:
-   ```bash
-   open -a Xcode /Users/shloktiwari/Documents/untitled\ folder/completed\ projects/lumnnverci
-   # Or directly open Package.swift:
-   open Package.swift
-   ```
-2. **Select Scheme and Destination**:
-   - In Xcode's top toolbar, click the Scheme dropdown and select **`VerciLumn` > `My Mac`**.
-3. **Build & Run**:
-   - Press **`⌘ + R`** (or click the Play button).
-   - VerciLumn will compile and launch directly in your macOS menu bar with icon `waveform.badge.magnifyingglass`.
-
----
-
-### Option 2: Run via Terminal
-
-You can also compile and run directly from the command line:
+### Build from Command Line
 ```bash
-# Build executable
-swift build
+# Clone the repository
+git clone https://github.com/sshloktiwarii/VerciLumn.git
+cd VerciLumn
 
-# Run background executable
+# Run automated tests
+swift test
+
+# Build release binary
+swift build -c release
+
+# Launch background application
 swift run VerciLumn
 ```
 
----
-
-## 🔐 Required macOS Permissions (First-Time Setup)
-
-When running for the first time, macOS will request the following permissions:
-
-1. **Apple Events / Automation (Spotify & Apple Music)**:
-   - A dialog will appear asking: *"VerciLumn wants access to control Spotify / Music"*. Click **OK**.
-   - If missed, verify under: **System Settings > Privacy & Security > Automation > VerciLumn**.
-
-2. **Screen & System Audio Recording (ScreenCaptureKit)**:
-   - Required by `ScreenCaptureKit` to analyze raw system audio PCM buffers for beat detection.
-   - Go to: **System Settings > Privacy & Security > Screen & System Audio Recording**.
-   - Ensure the toggle for your running target or terminal is enabled.
-   - *Note:* If permission has not been granted yet, VerciLumn automatically falls back to an internal rhythmic beat simulation so visuals remain smooth and functional.
-
-3. **Background Agent Mode (`LSUIElement`)**:
-   - The app runs exclusively as a menu bar agent with zero Dock clutter. To control or quit, click the waveform icon in the top macOS menu bar.
+### Build with Xcode
+```bash
+open Package.swift
+```
+Select the `VerciLumn` scheme and press `⌘ + R`.
 
 ---
 
-## 🎛 Menu Bar Controls
+## Required macOS Permissions
 
-Clicking the VerciLumn icon in the macOS menu bar opens the control menu:
-- **Lyric Visual Style**: Toggle instantly between *Standard Stack*, *Ship (3D Perspective)*, *Fisheye Lens*, and *Visual Mode*.
-- **Beat-Reactive Bezel Glow**: Enable or disable display rim lighting.
-- **Beat Sensitivity**: Adjust audio reaction multiplier ($0.5\times$ to $2.5\times$).
-- **Engine Status**: Shows live status of playback poller and audio capture engine.
-- **Quit**: Gracefully closes lock screen overlay panels and releases all assertions.
+On first launch, macOS will prompt for the following system permissions:
+1. **Automation (Apple Events):** Allows VerciLumn to read track metadata and seek in Spotify and Apple Music. Verify in *System Settings > Privacy & Security > Automation*.
+2. **Screen & System Audio Recording (Optional):** Required by `ScreenCaptureKit` to analyze raw system audio PCM buffers for live beat reaction. If disabled, VerciLumn automatically falls back to an internal rhythmic simulation with zero visual degradation.
+3. **Accessibility (Optional):** Required for global keyboard shortcuts (`⌘ + ⇧ + L`, etc.) when other applications have focus. Verify in *System Settings > Privacy & Security > Accessibility*.
 
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.

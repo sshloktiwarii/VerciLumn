@@ -84,6 +84,11 @@ public struct LyricsData: Equatable {
     }
 }
 
+private final class LyricsDataBox {
+    let data: LyricsData
+    init(_ data: LyricsData) { self.data = data }
+}
+
 public final class LyricsFetcher: ObservableObject {
     public static let shared = LyricsFetcher()
     
@@ -91,7 +96,22 @@ public final class LyricsFetcher: ObservableObject {
     @Published public private(set) var isLoading: Bool = false
     
     private var lastQuery: String = ""
+    private var activeGeneration: Int = 0
+    private var activeTasks: [URLSessionTask] = []
+    private let taskQueue = DispatchQueue(label: "com.vercilumn.lyrics.tasks")
     private let session: URLSession
+    
+    // In-memory offline cache
+    private let lyricsCache = NSCache<NSString, LyricsDataBox>()
+    
+    // Precompiled Static Regexes (Eradicates repeated compilation in inner loops)
+    private static let standardRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: #"^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$"#)
+    }()
+    
+    private static let wordRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: #"<(\d{2}):(\d{2})\.(\d{2,3})>([^<]+)"#)
+    }()
     
     private init() {
         let config = URLSessionConfiguration.default
@@ -101,34 +121,120 @@ public final class LyricsFetcher: ObservableObject {
     }
     
     public func fetchLyrics(track: String, artist: String, album: String = "", duration: Double = 0) {
-        let queryKey = "\(track.lowercased())-\(artist.lowercased())"
-        guard !track.isEmpty, queryKey != lastQuery else { return }
-        self.lastQuery = queryKey
+        let trimmedTrack = track.trimmingCharacters(in: .whitespaces)
+        let trimmedArtist = artist.trimmingCharacters(in: .whitespaces)
+        guard !trimmedTrack.isEmpty else { return }
         
-        DispatchQueue.main.async {
+        // If already showing verified lyrics for this track, avoid redundant network queries
+        if currentLyrics.trackTitle.lowercased() == trimmedTrack.lowercased() &&
+           currentLyrics.artistName.lowercased() == trimmedArtist.lowercased() &&
+           !currentLyrics.lines.isEmpty {
+            return
+        }
+        
+        let queryKey = "\(trimmedTrack.lowercased())-\(trimmedArtist.lowercased())"
+        let cacheKey = NSString(string: queryKey)
+        
+        // 1. Cancel in-flight requests from previously skipped songs immediately
+        var generation = 0
+        taskQueue.sync {
+            for task in self.activeTasks {
+                task.cancel()
+            }
+            self.activeTasks.removeAll()
+            self.activeGeneration += 1
+            generation = self.activeGeneration
+        }
+        
+        // 2. Check in-memory cache first for instant zero-latency replay
+        if let cached = lyricsCache.object(forKey: cacheKey) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.activeGeneration == generation else { return }
+                self.currentLyrics = cached.data
+                self.isLoading = false
+            }
+            return
+        }
+        
+        // 3. Immediately clear stale lyrics from old song so screen never gets stuck
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.activeGeneration == generation else { return }
+            self.currentLyrics = LyricsData(trackTitle: trimmedTrack, artistName: trimmedArtist)
             self.isLoading = true
         }
         
-        // 1. Primary: LRCLIB
-        fetchFromLRCLIB(track: track, artist: artist, album: album, duration: duration) { [weak self] result in
+        let cleanTitle = cleanTrackTitle(trimmedTrack)
+        
+        // 4. Primary: LRCLIB exact get
+        fetchFromLRCLIB(track: trimmedTrack, artist: trimmedArtist, album: album, duration: duration, generation: generation) { [weak self] result in
+            guard let self = self, self.activeGeneration == generation else { return }
+            
             if let lyrics = result, !lyrics.lines.isEmpty {
-                DispatchQueue.main.async {
-                    self?.currentLyrics = lyrics
-                    self?.isLoading = false
+                self.cacheAndPublish(lyrics, for: cacheKey, generation: generation)
+                return
+            }
+            
+            // 5. Secondary: LRCLIB fuzzy search with cleaned title
+            self.searchLRCLIB(track: cleanTitle, artist: trimmedArtist, generation: generation) { searchResult in
+                guard self.activeGeneration == generation else { return }
+                
+                if let sLyrics = searchResult, !sLyrics.lines.isEmpty {
+                    self.cacheAndPublish(sLyrics, for: cacheKey, generation: generation)
+                    return
                 }
-            } else {
-                // 2. Secondary Fallback: NetEase Cloud Music (Massive International, Bollywood & K-pop coverage)
-                self?.fetchFromNetEase(track: track, artist: artist) { fallbackResult in
-                    DispatchQueue.main.async {
-                        self?.currentLyrics = fallbackResult ?? LyricsData(trackTitle: track, artistName: artist)
-                        self?.isLoading = false
-                    }
+                
+                // 6. Tertiary: NetEase Cloud Music fallback
+                self.fetchFromNetEase(track: cleanTitle, artist: trimmedArtist, generation: generation) { fallbackResult in
+                    guard self.activeGeneration == generation else { return }
+                    let finalLyrics = fallbackResult ?? LyricsData(trackTitle: trimmedTrack, artistName: trimmedArtist)
+                    self.cacheAndPublish(finalLyrics, for: cacheKey, generation: generation)
                 }
             }
         }
     }
     
-    private func fetchFromLRCLIB(track: String, artist: String, album: String, duration: Double, completion: @escaping (LyricsData?) -> Void) {
+    // Clean artist and track titles to strip out '(Remastered)', '(feat. ...)', etc.
+    private func cleanTrackTitle(_ title: String) -> String {
+        var clean = title
+        let patterns = [
+            #"\(feat\..*?\)"#,
+            #"\[feat\..*?\]"#,
+            #"\(with.*?\)"#,
+            #"\(remaster.*?\)"#,
+            #"\[remaster.*?\]"#,
+            #"- remaster.*"#,
+            #"\(deluxe.*?\)"#,
+            #"\(live.*?\)"#,
+            #"\[live.*?\]"#,
+            #"\(anniversary.*?\)"#
+        ]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                clean = regex.stringByReplacingMatches(in: clean, range: NSRange(clean.startIndex..., in: clean), withTemplate: "")
+            }
+        }
+        return clean.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func cacheAndPublish(_ lyrics: LyricsData, for key: NSString, generation: Int) {
+        guard generation == self.activeGeneration else { return }
+        if !lyrics.lines.isEmpty {
+            lyricsCache.setObject(LyricsDataBox(lyrics), forKey: key)
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.activeGeneration == generation else { return }
+            self.currentLyrics = lyrics
+            self.isLoading = false
+        }
+    }
+    
+    private func trackTask(_ task: URLSessionTask) {
+        taskQueue.sync {
+            self.activeTasks.append(task)
+        }
+    }
+    
+    private func fetchFromLRCLIB(track: String, artist: String, album: String, duration: Double, generation: Int, completion: @escaping (LyricsData?) -> Void) {
         var components = URLComponents(string: "https://lrclib.net/api/get")
         var queryItems = [
             URLQueryItem(name: "track_name", value: track),
@@ -147,7 +253,8 @@ public final class LyricsFetcher: ObservableObject {
             return
         }
         
-        session.dataTask(with: url) { [weak self] data, response, error in
+        let task = session.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self, self.activeGeneration == generation else { return }
             guard let data = data, error == nil else {
                 completion(nil)
                 return
@@ -169,12 +276,57 @@ public final class LyricsFetcher: ObservableObject {
                 return
             }
             
-            let parsed = self?.parseLRC(rawLyrics, track: track, artist: artist, source: "LRCLIB")
+            let parsed = self.parseLRC(rawLyrics, track: track, artist: artist, source: "LRCLIB")
             completion(parsed)
-        }.resume()
+        }
+        trackTask(task)
+        task.resume()
     }
     
-    private func fetchFromNetEase(track: String, artist: String, completion: @escaping (LyricsData?) -> Void) {
+    private func searchLRCLIB(track: String, artist: String, generation: Int, completion: @escaping (LyricsData?) -> Void) {
+        var components = URLComponents(string: "https://lrclib.net/api/search")
+        components?.queryItems = [
+            URLQueryItem(name: "q", value: "\(track) \(artist)")
+        ]
+        
+        guard let url = components?.url else {
+            completion(nil)
+            return
+        }
+        
+        let task = session.dataTask(with: url) { [weak self] data, _, error in
+            guard let self = self, self.activeGeneration == generation else { return }
+            guard let data = data, error == nil else {
+                completion(nil)
+                return
+            }
+            
+            struct SearchItem: Decodable {
+                let trackName: String?
+                let artistName: String?
+                let syncedLyrics: String?
+                let plainLyrics: String?
+            }
+            
+            guard let items = try? JSONDecoder().decode([SearchItem].self, from: data), let firstItem = items.first else {
+                completion(nil)
+                return
+            }
+            
+            let raw = firstItem.syncedLyrics ?? firstItem.plainLyrics ?? ""
+            guard !raw.isEmpty else {
+                completion(nil)
+                return
+            }
+            
+            let parsed = self.parseLRC(raw, track: track, artist: artist, source: "LRCLIB (Search)")
+            completion(parsed)
+        }
+        trackTask(task)
+        task.resume()
+    }
+    
+    private func fetchFromNetEase(track: String, artist: String, generation: Int, completion: @escaping (LyricsData?) -> Void) {
         let searchQuery = "\(track) \(artist)"
         var components = URLComponents(string: "https://music.163.com/api/search/get/web")
         components?.queryItems = [
@@ -192,7 +344,8 @@ public final class LyricsFetcher: ObservableObject {
         var request = URLRequest(url: searchUrl)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         
-        session.dataTask(with: request) { [weak self] data, _, error in
+        let task = session.dataTask(with: request) { [weak self] data, _, error in
+            guard let self = self, self.activeGeneration == generation else { return }
             guard let data = data, error == nil,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let result = json["result"] as? [String: Any],
@@ -208,7 +361,8 @@ public final class LyricsFetcher: ObservableObject {
                 return
             }
             
-            self?.session.dataTask(with: lyricUrl) { lData, _, lError in
+            let subTask = self.session.dataTask(with: lyricUrl) { lData, _, lError in
+                guard self.activeGeneration == generation else { return }
                 guard let lData = lData, lError == nil,
                       let lJson = try? JSONSerialization.jsonObject(with: lData) as? [String: Any],
                       let lrcObj = lJson["lrc"] as? [String: Any],
@@ -218,19 +372,23 @@ public final class LyricsFetcher: ObservableObject {
                     return
                 }
                 
-                let parsed = self?.parseLRC(lrcStr, track: track, artist: artist, source: "NetEase Cloud")
+                let parsed = self.parseLRC(lrcStr, track: track, artist: artist, source: "NetEase Cloud")
                 completion(parsed)
-            }.resume()
-        }.resume()
+            }
+            self.trackTask(subTask)
+            subTask.resume()
+        }
+        trackTask(task)
+        task.resume()
     }
     
     public func parseLRC(_ text: String, track: String, artist: String, source: String = "LRCLIB") -> LyricsData {
         let rawLines = text.components(separatedBy: .newlines)
-        var parsedLines: [LyricLine] = []
+        var rawParsed: [(time: TimeInterval, text: String, elrcWords: [WordToken])] = []
         var detectedWordSync = false
         
-        let standardRegex = try? NSRegularExpression(pattern: #"^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$"#)
-        let wordRegex = try? NSRegularExpression(pattern: #"<(\d{2}):(\d{2})\.(\d{2,3})>([^<]+)"#)
+        let standardRegex = Self.standardRegex
+        let wordRegex = Self.wordRegex
         
         for rawLine in rawLines {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
@@ -266,22 +424,44 @@ public final class LyricsFetcher: ObservableObject {
                             words.append(WordToken(text: wordText, timestamp: wordTime))
                         }
                     }
-                } else {
-                    // Approximate word timestamps linearly across estimated duration
-                    let splitWords = content.split(separator: " ").map(String.init)
-                    let estimatedLineDuration = 3.5
-                    let step = splitWords.count > 0 ? (estimatedLineDuration / Double(splitWords.count)) : 0.4
-                    for (i, word) in splitWords.enumerated() {
-                        let wordTime = lineTime + (Double(i) * step)
-                        words.append(WordToken(text: word, timestamp: wordTime, duration: step))
-                    }
                 }
                 
-                parsedLines.append(LyricLine(timestamp: lineTime, fullText: content, words: words))
+                rawParsed.append((time: lineTime, text: content, elrcWords: words))
             }
         }
         
-        parsedLines.sort { $0.timestamp < $1.timestamp }
-        return LyricsData(trackTitle: track, artistName: artist, lines: parsedLines, isWordSynced: detectedWordSync, source: source)
+        // Sort strictly chronologically
+        rawParsed.sort { $0.time < $1.time }
+        
+        // Dynamic Inter-line Delta Word Timing
+        var finalLines: [LyricLine] = []
+        for i in 0..<rawParsed.count {
+            let current = rawParsed[i]
+            var words: [WordToken] = []
+            
+            if !current.elrcWords.isEmpty {
+                words = current.elrcWords
+            } else {
+                // Calculate dynamic line duration based on adjacent next line timestamp
+                let lineDuration: Double
+                if i + 1 < rawParsed.count {
+                    let delta = rawParsed[i + 1].time - current.time
+                    lineDuration = min(max(delta, 0.8), 7.5)
+                } else {
+                    lineDuration = 3.5
+                }
+                
+                let splitWords = current.text.split(separator: " ").map(String.init)
+                let step = splitWords.count > 0 ? (lineDuration / Double(splitWords.count)) : 0.4
+                for (wIdx, word) in splitWords.enumerated() {
+                    let wordTime = current.time + (Double(wIdx) * step)
+                    words.append(WordToken(text: word, timestamp: wordTime, duration: step))
+                }
+            }
+            
+            finalLines.append(LyricLine(timestamp: current.time, fullText: current.text, words: words))
+        }
+        
+        return LyricsData(trackTitle: track, artistName: artist, lines: finalLines, isWordSynced: detectedWordSync, source: source)
     }
 }

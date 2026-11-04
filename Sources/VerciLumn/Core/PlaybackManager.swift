@@ -11,6 +11,7 @@ public struct TrackState: Equatable {
     public let isPlaying: Bool
     public let sampledAt: TimeInterval
     public let artwork: NSImage?
+    public let playerSource: String
     
     public init(
         title: String = "",
@@ -20,7 +21,8 @@ public struct TrackState: Equatable {
         duration: TimeInterval = 0,
         isPlaying: Bool = false,
         sampledAt: TimeInterval = CACurrentMediaTime(),
-        artwork: NSImage? = nil
+        artwork: NSImage? = nil,
+        playerSource: String = "None"
     ) {
         self.title = title
         self.artist = artist
@@ -30,6 +32,7 @@ public struct TrackState: Equatable {
         self.isPlaying = isPlaying
         self.sampledAt = sampledAt
         self.artwork = artwork
+        self.playerSource = playerSource
     }
     
     public func exactPosition(withOffset offset: TimeInterval = 0) -> TimeInterval {
@@ -57,6 +60,61 @@ public final class PlaybackManager: ObservableObject {
     private var timer: AnyCancellable?
     private let pollQueue = DispatchQueue(label: "com.vercilumn.playback.poller", qos: .userInitiated)
     
+    // Artwork Cache
+    private let artworkCache = NSCache<NSString, NSImage>()
+    private var fetchingUrls = Set<String>()
+    
+    // Pre-compiled AppleScripts
+    private let spotifyPollScript: NSAppleScript? = {
+        let script = """
+        if application "Spotify" is running then
+            tell application "Spotify"
+                if player state is playing then
+                    set trackName to name of current track
+                    set artistName to artist of current track
+                    set albumName to album of current track
+                    set trackDuration to (duration of current track) / 1000.0
+                    set trackPosition to player position
+                    set artUrl to artwork url of current track
+                    return trackName & "|||" & artistName & "|||" & albumName & "|||" & trackPosition & "|||" & trackDuration & "|||" & artUrl
+                end if
+            end tell
+        end if
+        return "INACTIVE"
+        """
+        return NSAppleScript(source: script)
+    }()
+    
+    private let musicPollScript: NSAppleScript? = {
+        let script = """
+        if application "Music" is running then
+            tell application "Music"
+                if player state is playing then
+                    set trackName to name of current track
+                    set artistName to artist of current track
+                    set albumName to album of current track
+                    set trackDuration to duration of current track
+                    set trackPosition to player position
+                    return trackName & "|||" & artistName & "|||" & albumName & "|||" & trackPosition & "|||" & trackDuration
+                end if
+            end tell
+        end if
+        return "INACTIVE"
+        """
+        return NSAppleScript(source: script)
+    }()
+    
+    private let musicArtworkScript: NSAppleScript? = {
+        let script = """
+        tell application "Music"
+            try
+                return raw data of artwork 1 of current track
+            end try
+        end tell
+        """
+        return NSAppleScript(source: script)
+    }()
+    
     private init() {
         startPolling()
     }
@@ -77,58 +135,76 @@ public final class PlaybackManager: ObservableObject {
     
     public func pollActivePlayer() {
         pollQueue.async { [weak self] in
-            if let spotifyTrack = self?.querySpotify() {
+            guard let self = self else { return }
+            
+            if let spotifyTrack = self.querySpotify() {
                 DispatchQueue.main.async {
-                    self?.currentTrack = spotifyTrack
+                    self.updateTrackState(spotifyTrack)
                 }
                 return
             }
             
-            if let musicTrack = self?.queryAppleMusic() {
+            if let musicTrack = self.queryAppleMusic() {
                 DispatchQueue.main.async {
-                    self?.currentTrack = musicTrack
+                    self.updateTrackState(musicTrack)
                 }
                 return
             }
             
             DispatchQueue.main.async {
-                if self?.currentTrack.isPlaying == true {
-                    self?.currentTrack = TrackState(
-                        title: self?.currentTrack.title ?? "",
-                        artist: self?.currentTrack.artist ?? "",
-                        album: self?.currentTrack.album ?? "",
-                        position: self?.currentTrack.position ?? 0,
-                        duration: self?.currentTrack.duration ?? 0,
+                if self.currentTrack.isPlaying {
+                    self.currentTrack = TrackState(
+                        title: self.currentTrack.title,
+                        artist: self.currentTrack.artist,
+                        album: self.currentTrack.album,
+                        position: self.currentTrack.position,
+                        duration: self.currentTrack.duration,
                         isPlaying: false,
                         sampledAt: CACurrentMediaTime(),
-                        artwork: self?.currentTrack.artwork
+                        artwork: self.currentTrack.artwork,
+                        playerSource: self.currentTrack.playerSource
                     )
                 }
             }
         }
     }
     
-    private func querySpotify() -> TrackState? {
-        let script = """
-        if application "Spotify" is running then
-            tell application "Spotify"
-                if player state is playing then
-                    set trackName to name of current track
-                    set artistName to artist of current track
-                    set albumName to album of current track
-                    set trackDuration to (duration of current track) / 1000.0
-                    set trackPosition to player position
-                    set artUrl to artwork url of current track
-                    return trackName & "|||" & artistName & "|||" & albumName & "|||" & trackPosition & "|||" & trackDuration & "|||" & artUrl
-                end if
-            end tell
-        end if
-        return "INACTIVE"
-        """
+    private func updateTrackState(_ newTrack: TrackState) {
+        // If track changed, fetch lyrics automatically
+        if newTrack.title != currentTrack.title || newTrack.artist != currentTrack.artist {
+            LyricsFetcher.shared.fetchLyrics(
+                track: newTrack.title,
+                artist: newTrack.artist,
+                album: newTrack.album,
+                duration: newTrack.duration
+            )
+            
+            // Extract dynamic color palette if artwork exists
+            if let art = newTrack.artwork {
+                _ = ColorPaletteManager.shared.extractPalette(from: art)
+            }
+        }
         
+        // Preserve artwork if newTrack has none yet but keys match
+        let finalArtwork = newTrack.artwork ?? (newTrack.title == currentTrack.title ? currentTrack.artwork : nil)
+        
+        self.currentTrack = TrackState(
+            title: newTrack.title,
+            artist: newTrack.artist,
+            album: newTrack.album,
+            position: newTrack.position,
+            duration: newTrack.duration,
+            isPlaying: newTrack.isPlaying,
+            sampledAt: newTrack.sampledAt,
+            artwork: finalArtwork,
+            playerSource: newTrack.playerSource
+        )
+    }
+    
+    private func querySpotify() -> TrackState? {
+        guard let script = spotifyPollScript else { return nil }
         var error: NSDictionary?
-        guard let appleScript = NSAppleScript(source: script),
-              let output = appleScript.executeAndReturnError(&error).stringValue,
+        guard let output = script.executeAndReturnError(&error).stringValue,
               output != "INACTIVE" else {
             return nil
         }
@@ -141,11 +217,35 @@ public final class PlaybackManager: ObservableObject {
         let album = parts[2]
         let position = Double(parts[3]) ?? 0.0
         let duration = Double(parts[4]) ?? 0.0
+        let artUrlStr = parts.count >= 6 ? parts[5] : ""
         
-        var artworkImage: NSImage?
-        if parts.count >= 6, let url = URL(string: parts[5]), !parts[5].isEmpty {
-            if let data = try? Data(contentsOf: url) {
-                artworkImage = NSImage(data: data)
+        let cacheKey = NSString(string: "\(title)-\(artist)-\(album)")
+        let artworkImage = artworkCache.object(forKey: cacheKey)
+        
+        // Asynchronous non-blocking artwork fetch
+        if artworkImage == nil && !artUrlStr.isEmpty && !fetchingUrls.contains(artUrlStr) {
+            if let url = URL(string: artUrlStr) {
+                fetchingUrls.insert(artUrlStr)
+                URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+                    guard let self = self, let data = data, let image = NSImage(data: data) else { return }
+                    self.artworkCache.setObject(image, forKey: cacheKey)
+                    DispatchQueue.main.async {
+                        if self.currentTrack.title == title {
+                            self.currentTrack = TrackState(
+                                title: self.currentTrack.title,
+                                artist: self.currentTrack.artist,
+                                album: self.currentTrack.album,
+                                position: self.currentTrack.position,
+                                duration: self.currentTrack.duration,
+                                isPlaying: self.currentTrack.isPlaying,
+                                sampledAt: self.currentTrack.sampledAt,
+                                artwork: image,
+                                playerSource: "Spotify"
+                            )
+                            _ = ColorPaletteManager.shared.extractPalette(from: image)
+                        }
+                    }
+                }.resume()
             }
         }
         
@@ -157,30 +257,15 @@ public final class PlaybackManager: ObservableObject {
             duration: duration,
             isPlaying: true,
             sampledAt: CACurrentMediaTime(),
-            artwork: artworkImage
+            artwork: artworkImage,
+            playerSource: "Spotify"
         )
     }
     
     private func queryAppleMusic() -> TrackState? {
-        let script = """
-        if application "Music" is running then
-            tell application "Music"
-                if player state is playing then
-                    set trackName to name of current track
-                    set artistName to artist of current track
-                    set albumName to album of current track
-                    set trackDuration to duration of current track
-                    set trackPosition to player position
-                    return trackName & "|||" & artistName & "|||" & albumName & "|||" & trackPosition & "|||" & trackDuration
-                end if
-            end tell
-        end if
-        return "INACTIVE"
-        """
-        
+        guard let script = musicPollScript else { return nil }
         var error: NSDictionary?
-        guard let appleScript = NSAppleScript(source: script),
-              let output = appleScript.executeAndReturnError(&error).stringValue,
+        guard let output = script.executeAndReturnError(&error).stringValue,
               output != "INACTIVE" else {
             return nil
         }
@@ -194,20 +279,16 @@ public final class PlaybackManager: ObservableObject {
         let position = Double(parts[3]) ?? 0.0
         let duration = Double(parts[4]) ?? 0.0
         
-        var artworkImage: NSImage?
-        let artScript = """
-        tell application "Music"
-            try
-                set rawData to raw data of artwork 1 of current track
-                return rawData
-            end try
-        end tell
-        """
-        if let artAppleScript = NSAppleScript(source: artScript) {
-            let artDescriptor = artAppleScript.executeAndReturnError(nil)
+        let cacheKey = NSString(string: "\(title)-\(artist)-\(album)")
+        var artworkImage = artworkCache.object(forKey: cacheKey)
+        
+        // Only run expensive AppleScript artwork read if not in cache
+        if artworkImage == nil, let artScript = musicArtworkScript {
+            let artDescriptor = artScript.executeAndReturnError(nil)
             let data = artDescriptor.data
-            if !data.isEmpty {
-                artworkImage = NSImage(data: data)
+            if !data.isEmpty, let img = NSImage(data: data) {
+                artworkCache.setObject(img, forKey: cacheKey)
+                artworkImage = img
             }
         }
         
@@ -219,7 +300,104 @@ public final class PlaybackManager: ObservableObject {
             duration: duration,
             isPlaying: true,
             sampledAt: CACurrentMediaTime(),
-            artwork: artworkImage
+            artwork: artworkImage,
+            playerSource: "Apple Music"
         )
+    }
+    
+    // MARK: - Interactive Seeking (Feature 1)
+    
+    public func seekTo(seconds: TimeInterval) {
+        let target = max(0, seconds)
+        let source = currentTrack.playerSource
+        
+        // Optimistically update local position immediately
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.currentTrack = TrackState(
+                title: self.currentTrack.title,
+                artist: self.currentTrack.artist,
+                album: self.currentTrack.album,
+                position: target,
+                duration: self.currentTrack.duration,
+                isPlaying: self.currentTrack.isPlaying,
+                sampledAt: CACurrentMediaTime(),
+                artwork: self.currentTrack.artwork,
+                playerSource: self.currentTrack.playerSource
+            )
+        }
+        
+        pollQueue.async {
+            if source == "Spotify" || source.isEmpty || source == "None" {
+                let script = """
+                if application "Spotify" is running then
+                    tell application "Spotify" to set player position to \(target)
+                end if
+                """
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            }
+            if source == "Apple Music" || source.isEmpty || source == "None" {
+                let script = """
+                if application "Music" is running then
+                    tell application "Music" to set player position to \(target)
+                end if
+                """
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            }
+        }
+    }
+    
+    public func rewind(seconds: TimeInterval = 5.0) {
+        let target = max(0, currentTrack.exactPosition - seconds)
+        seekTo(seconds: target)
+    }
+    
+    public func fastForward(seconds: TimeInterval = 5.0) {
+        let target = min(currentTrack.duration, currentTrack.exactPosition + seconds)
+        seekTo(seconds: target)
+    }
+    
+    // MARK: - Playback Media Controls
+    
+    public func togglePlayPause() {
+        let source = currentTrack.playerSource
+        pollQueue.async { [weak self] in
+            if source == "Spotify" {
+                let script = "tell application \"Spotify\" to playpause"
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            } else {
+                let script = "tell application \"Music\" to playpause"
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            }
+            self?.pollActivePlayer()
+        }
+    }
+    
+    public func nextTrack() {
+        let source = currentTrack.playerSource
+        pollQueue.async { [weak self] in
+            if source == "Spotify" {
+                let script = "tell application \"Spotify\" to next track"
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            } else {
+                let script = "tell application \"Music\" to next track"
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            }
+            self?.pollActivePlayer()
+        }
+    }
+    
+    public func previousTrack() {
+        let source = currentTrack.playerSource
+        pollQueue.async { [weak self] in
+            if source == "Spotify" {
+                let script = "tell application \"Spotify\" to previous track"
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            } else {
+                let script = "tell application \"Music\" to previous track"
+                NSAppleScript(source: script)?.executeAndReturnError(nil)
+            }
+            self?.pollActivePlayer()
+        }
     }
 }

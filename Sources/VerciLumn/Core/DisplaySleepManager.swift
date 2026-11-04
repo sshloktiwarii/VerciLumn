@@ -4,7 +4,8 @@ import IOKit.pwr_mgt
 public final class DisplaySleepManager {
     public static let shared = DisplaySleepManager()
     
-    private var assertionID: IOPMAssertionID = 0
+    private var displayAssertionID: IOPMAssertionID = 0
+    private var systemAssertionID: IOPMAssertionID = 0
     private var hasActiveAssertion: Bool = false
     
     private init() {}
@@ -12,27 +13,46 @@ public final class DisplaySleepManager {
     public func setPreventDisplaySleep(_ prevent: Bool, reason: String = "VerciLumn Active Playback") {
         if prevent {
             guard !hasActiveAssertion else { return }
-            let result = IOPMAssertionCreateWithName(
+            
+            // Prevent display from dimming or sleeping
+            let displayResult = IOPMAssertionCreateWithName(
                 kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
                 IOPMAssertionLevel(kIOPMAssertionLevelOn),
                 reason as CFString,
-                &assertionID
+                &displayAssertionID
             )
-            if result == kIOReturnSuccess {
+            
+            // Prevent CPU from sleeping during lock screen playback
+            let systemResult = IOPMAssertionCreateWithName(
+                kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
+                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                reason as CFString,
+                &systemAssertionID
+            )
+            
+            if displayResult == kIOReturnSuccess || systemResult == kIOReturnSuccess {
                 hasActiveAssertion = true
             }
         } else {
             guard hasActiveAssertion else { return }
-            IOPMAssertionRelease(assertionID)
+            if displayAssertionID != 0 {
+                IOPMAssertionRelease(displayAssertionID)
+                displayAssertionID = 0
+            }
+            if systemAssertionID != 0 {
+                IOPMAssertionRelease(systemAssertionID)
+                systemAssertionID = 0
+            }
             hasActiveAssertion = false
-            assertionID = 0
         }
     }
     
     deinit {
         if hasActiveAssertion {
-            IOPMAssertionRelease(assertionID)
+            if displayAssertionID != 0 { IOPMAssertionRelease(displayAssertionID) }
+            if systemAssertionID != 0 { IOPMAssertionRelease(systemAssertionID) }
         }
     }
 }
+
 

@@ -1,23 +1,26 @@
 import AppKit
 import Combine
+import ApplicationServices
 
 public final class HotKeyManager: ObservableObject {
     public static let shared = HotKeyManager()
     
     @Published public var isIdleScreensaverEnabled: Bool = true
     @Published public var idleThresholdSeconds: Double = 60.0
+    @Published public private(set) var isAccessibilityGranted: Bool = false
     
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var idleCheckTimer: AnyCancellable?
     private var isCurrentlyInAutoScreensaver: Bool = false
-    private var previousDisplayMode: WindowDisplayMode = .desktop
+    private var previousDisplayMode: WindowDisplayMode = .fullStage
     
     public var onToggleStage: (() -> Void)?
     public var onCycleStyle: (() -> Void)?
     public var onAdjustOffset: ((Double) -> Void)?
     
     private init() {
+        checkAccessibilityPermissions()
         startHotkeyMonitors()
         startIdleTimer()
     }
@@ -25,6 +28,21 @@ public final class HotKeyManager: ObservableObject {
     deinit {
         stopHotkeyMonitors()
         idleCheckTimer?.cancel()
+    }
+    
+    @discardableResult
+    public func checkAccessibilityPermissions() -> Bool {
+        let trusted = AXIsProcessTrusted()
+        DispatchQueue.main.async { [weak self] in
+            self?.isAccessibilityGranted = trusted
+        }
+        return trusted
+    }
+    
+    public func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     public func startHotkeyMonitors() {
@@ -56,36 +74,56 @@ public final class HotKeyManager: ObservableObject {
     @discardableResult
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let keyChar = event.charactersIgnoringModifiers?.lowercased()
         
         // 1. Command + Shift + L -> Toggle Full Stage Immersion
-        if flags == [.command, .shift] && event.charactersIgnoringModifiers?.lowercased() == "l" {
-            DispatchQueue.main.async { [weak self] in
-                self?.onToggleStage?()
+        if flags == [.command, .shift] && keyChar == "l" {
+            DispatchQueue.main.async {
+                let current = AppSettings.shared.displayMode
+                let next: WindowDisplayMode = (current == .fullStage) ? .desktop : .fullStage
+                AppSettings.shared.displayMode = next
+                OverlayWindowManager.shared.setDisplayMode(next)
             }
             return true
         }
         
-        // 2. Command + Option + RightArrow -> Cycle Lyric Themes
-        if flags == [.command, .option] && event.keyCode == 124 { // 124 is Right Arrow
-            DispatchQueue.main.async { [weak self] in
-                self?.onCycleStyle?()
+        // 2. Command + Shift + N -> Toggle Dynamic Notch Island
+        if flags == [.command, .shift] && keyChar == "n" {
+            DispatchQueue.main.async {
+                AppSettings.shared.isNotchHUDEnabled.toggle()
             }
             return true
         }
         
-        // 3. Command + [ -> Sync Offset -50ms
+        // 3. Command + Option + RightArrow -> Cycle Lyric Themes
+        if flags == [.command, .option] && event.keyCode == 124 { // 124 = Right Arrow
+            DispatchQueue.main.async {
+                let all = LyricStyle.allCases
+                let idx = all.firstIndex(of: AppSettings.shared.lyricStyle) ?? 0
+                AppSettings.shared.lyricStyle = all[(idx + 1) % all.count]
+            }
+            return true
+        }
+        
+        // 4. Command + [ -> Sync Offset -50ms
         if flags == .command && event.charactersIgnoringModifiers == "[" {
-            DispatchQueue.main.async { [weak self] in
-                self?.onAdjustOffset?(-0.05)
+            DispatchQueue.main.async {
+                AppSettings.shared.timingOffset = min(max(AppSettings.shared.timingOffset - 0.05, -2.0), 2.0)
             }
             return true
         }
         
-        // 4. Command + ] -> Sync Offset +50ms
+        // 5. Command + ] -> Sync Offset +50ms
         if flags == .command && event.charactersIgnoringModifiers == "]" {
-            DispatchQueue.main.async { [weak self] in
-                self?.onAdjustOffset?(+0.05)
+            DispatchQueue.main.async {
+                AppSettings.shared.timingOffset = min(max(AppSettings.shared.timingOffset + 0.05, -2.0), 2.0)
             }
+            return true
+        }
+        
+        // 6. Command + Shift + Space -> Media Play/Pause
+        if flags == [.command, .shift] && event.keyCode == 49 { // 49 = Space
+            PlaybackManager.shared.togglePlayPause()
             return true
         }
         
@@ -108,14 +146,16 @@ public final class HotKeyManager: ObservableObject {
         
         if isPlaying && idleTime >= idleThresholdSeconds && !isCurrentlyInAutoScreensaver {
             // User has been idle for > 60s while music is playing -> Activate Full Stage Screensaver
-            previousDisplayMode = OverlayWindowManager.shared.currentMode
+            previousDisplayMode = AppSettings.shared.displayMode
             if previousDisplayMode != .fullStage {
                 isCurrentlyInAutoScreensaver = true
+                AppSettings.shared.displayMode = .fullStage
                 OverlayWindowManager.shared.setDisplayMode(.fullStage)
             }
         } else if isCurrentlyInAutoScreensaver && idleTime < 2.0 {
             // User moved mouse or typed -> restore previous window placement
             isCurrentlyInAutoScreensaver = false
+            AppSettings.shared.displayMode = previousDisplayMode
             OverlayWindowManager.shared.setDisplayMode(previousDisplayMode)
         }
     }

@@ -16,8 +16,13 @@ let package = Package(
             dependencies: [],
             path: "Sources/VerciLumn",
             resources: [
-                .copy("Shaders/FisheyeShader.metal")
+                .process("Shaders/FisheyeShader.metal")
             ]
+        ),
+        .testTarget(
+            name: "VerciLumnTests",
+            dependencies: ["VerciLumn"],
+            path: "Tests/VerciLumnTests"
         )
     ]
 )

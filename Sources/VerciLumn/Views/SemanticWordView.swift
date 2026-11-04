@@ -5,16 +5,19 @@ public struct SemanticWordView: View {
     let fontSize: CGFloat
     let accentColor: Color
     let beatIntensity: Float
+    var onTap: (() -> Void)? = nil
     
     @ObservedObject var semanticEngine = WordSemanticEngine.shared
     @State private var phase: CGFloat = 0
     @State private var shakeOffset: CGFloat = 0
+    @State private var isHovered: Bool = false
     
-    public init(word: String, fontSize: CGFloat, accentColor: Color, beatIntensity: Float = 0.0) {
+    public init(word: String, fontSize: CGFloat, accentColor: Color, beatIntensity: Float = 0.0, onTap: (() -> Void)? = nil) {
         self.word = word
         self.fontSize = fontSize
         self.accentColor = accentColor
         self.beatIntensity = beatIntensity
+        self.onTap = onTap
     }
     
     public var body: some View {
@@ -61,7 +64,16 @@ public struct SemanticWordView: View {
             .padding(.vertical, fontSize * 0.16)
             .background(badgeBackground(for: style))
             .offset(x: shakeOffset)
-            .scaleEffect(1.0 + (CGFloat(beatIntensity) * 0.05))
+            .scaleEffect((1.0 + (CGFloat(beatIntensity) * 0.05)) * (isHovered ? 1.04 : 1.0))
+            .shadow(color: isHovered ? accentColor.opacity(0.6) : .clear, radius: 12)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isHovered = hovering
+                }
+            }
+            .onTapGesture {
+                onTap?()
+            }
         }
         .onAppear {
             if style.shakeIntensity > 0 {
@@ -163,9 +175,24 @@ public struct SemanticWordView: View {
                 .shadow(color: style.glowColor.opacity(0.8), radius: fontSize * 0.4, x: 0, y: 0)
                 
         case .standardAccent:
-            RoundedRectangle(cornerRadius: fontSize * 0.2, style: .continuous)
-                .fill(accentColor.opacity(0.88))
-                .shadow(color: accentColor.opacity(0.6), radius: fontSize * 0.28, x: 0, y: 6)
+            let palette = ThemeManager.shared.activePalette
+            if palette.isRainbow {
+                RoundedRectangle(cornerRadius: fontSize * 0.18, style: .continuous)
+                    .fill(LinearGradient(colors: palette.rainbowGradient, startPoint: .leading, endPoint: .trailing).opacity(0.25))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: fontSize * 0.18, style: .continuous)
+                            .stroke(palette.highlightAccent.opacity(0.6), lineWidth: 1)
+                    )
+                    .shadow(color: palette.highlightAccent.opacity(0.35), radius: fontSize * 0.2, x: 0, y: 2)
+            } else {
+                RoundedRectangle(cornerRadius: fontSize * 0.18, style: .continuous)
+                    .fill(accentColor.opacity(0.18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: fontSize * 0.18, style: .continuous)
+                            .stroke(accentColor.opacity(0.5), lineWidth: 1)
+                    )
+                    .shadow(color: accentColor.opacity(0.3), radius: fontSize * 0.2, x: 0, y: 2)
+            }
         }
     }
     

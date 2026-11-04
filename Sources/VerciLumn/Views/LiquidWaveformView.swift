@@ -2,7 +2,9 @@ import SwiftUI
 
 public struct LiquidWaveformRingView: View {
     @ObservedObject var spectrum = AudioSpectrumEngine.shared
-    @ObservedObject var palette = ColorPaletteManager.shared
+    @ObservedObject var theme = ThemeManager.shared
+    @ObservedObject var playback = PlaybackManager.shared
+    @ObservedObject var settings = AppSettings.shared
     let size: CGFloat
     
     public init(size: CGFloat = 320) {
@@ -10,7 +12,7 @@ public struct LiquidWaveformRingView: View {
     }
     
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 45.0, paused: false)) { timeline in
+        TimelineView(.animation(minimumInterval: settings.targetFpsInterval, paused: !playback.currentTrack.isPlaying)) { timeline in
             Canvas { context, canvasSize in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let center = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
@@ -43,7 +45,7 @@ public struct LiquidWaveformRingView: View {
                     }
                     path.closeSubpath()
                     
-                    let ringColor = (ring == 0) ? palette.currentPalette.highlightAccent : palette.currentPalette.secondaryGlow
+                    let ringColor = (ring == 0) ? theme.activePalette.highlightAccent : theme.activePalette.secondaryGlow
                     context.stroke(
                         path,
                         with: .color(ringColor.opacity(alpha)),
@@ -59,37 +61,43 @@ public struct LiquidWaveformRingView: View {
 
 public struct AmbientFloorBarsView: View {
     @ObservedObject var spectrum = AudioSpectrumEngine.shared
-    @ObservedObject var palette = ColorPaletteManager.shared
+    @ObservedObject var theme = ThemeManager.shared
+    @ObservedObject var playback = PlaybackManager.shared
     
     public init() {}
     
     public var body: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            ForEach(0..<32, id: \.self) { idx in
-                let bandIdx = (idx * 8) / 32
-                let val = CGFloat(spectrum.bands[bandIdx])
-                // Add natural arc curve towards center
-                let arc = sin(Double(idx) / 31.0 * .pi)
-                let barHeight = max(4.0, (val * 70.0 + 8.0) * CGFloat(arc))
-                
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                palette.currentPalette.highlightAccent.opacity(0.85),
-                                palette.currentPalette.secondaryGlow.opacity(0.4)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+        if playback.currentTrack.isPlaying {
+            let palette = theme.activePalette
+            let colors: [Color] = palette.isRainbow ? palette.rainbowGradient : [
+                palette.highlightAccent.opacity(0.6),
+                palette.secondaryGlow.opacity(0.2)
+            ]
+            
+            HStack(alignment: .bottom, spacing: 3) {
+                ForEach(0..<48, id: \.self) { idx in
+                    let bandIdx = (idx * 8) / 48
+                    let val = CGFloat(spectrum.bands[bandIdx])
+                    let arc = sin(Double(idx) / 47.0 * .pi)
+                    let barHeight = max(2.0, (val * 12.0 + 2.0) * CGFloat(arc))
+                    
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(
+                            LinearGradient(
+                                colors: colors,
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
-                    .frame(height: barHeight)
-                    .animation(.spring(response: 0.18, dampingFraction: 0.65), value: spectrum.bands)
+                        .frame(height: barHeight)
+                        .animation(.easeOut(duration: 0.08), value: val)
+                }
             }
+            .frame(height: 16)
+            .opacity(0.4)
+            .padding(.horizontal, 60)
+            .allowsHitTesting(false)
         }
-        .frame(height: 80)
-        .padding(.horizontal, 48)
-        .allowsHitTesting(false)
     }
 }
 

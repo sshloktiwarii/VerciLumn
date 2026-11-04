@@ -116,7 +116,16 @@ public final class AudioSpectrumEngine: ObservableObject, @unchecked Sendable {
             .sink { [weak self] _ in
                 guard let self = self else { return }
                 // Only run simulation when AudioBeatEngine is not actively feeding live samples
-                guard !AudioBeatEngine.shared.isCapturing else { return }
+                guard !AudioBeatEngine.shared.isHardwareCaptureActive else { return }
+                
+                // Freeze updates when no track is playing to prevent thermal build-up
+                guard PlaybackManager.shared.currentTrack.isPlaying else {
+                    if self.overallEnergy > 0 {
+                        self.bands = Array(repeating: 0.02, count: 8)
+                        self.overallEnergy = 0
+                    }
+                    return
+                }
                 
                 self.phase += 0.08
                 var sim = [Float](repeating: 0.0, count: 8)

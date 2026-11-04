@@ -7,4 +7,6 @@ xcuserdata/
 *.moved-aside
 DerivedData/
 .swiftpm/
-
+*.profraw
+*.profdata
+*.log

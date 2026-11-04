@@ -8,17 +8,42 @@ public struct ColorPalette: Equatable {
     public let primaryText: Color
     public let highlightAccent: Color
     public let secondaryGlow: Color
+    public let isRainbow: Bool
     
     public init(
         background: Color = Color(red: 0.08, green: 0.08, blue: 0.1),
         primaryText: Color = .white,
         highlightAccent: Color = Color(red: 0.95, green: 0.35, blue: 0.6),
-        secondaryGlow: Color = Color(red: 0.3, green: 0.6, blue: 0.95)
+        secondaryGlow: Color = Color(red: 0.3, green: 0.6, blue: 0.95),
+        isRainbow: Bool = false
     ) {
         self.background = background
         self.primaryText = primaryText
         self.highlightAccent = highlightAccent
         self.secondaryGlow = secondaryGlow
+        self.isRainbow = isRainbow
+    }
+    
+    public var rainbowGradient: [Color] {
+        return [
+            Color(red: 1.0, green: 0.22, blue: 0.28), // Red
+            Color(red: 1.0, green: 0.58, blue: 0.12), // Orange
+            Color(red: 1.0, green: 0.88, blue: 0.15), // Yellow
+            Color(red: 0.2, green: 0.92, blue: 0.55), // Green
+            Color(red: 0.15, green: 0.8, blue: 1.0),  // Cyan
+            Color(red: 0.65, green: 0.35, blue: 1.0), // Violet
+            Color(red: 1.0, green: 0.25, blue: 0.75)  // Magenta
+        ]
+    }
+    
+    public var accentSIMD: SIMD3<Float> {
+        let ns = NSColor(highlightAccent).usingColorSpace(.deviceRGB) ?? NSColor(red: 0.95, green: 0.35, blue: 0.6, alpha: 1.0)
+        return SIMD3<Float>(Float(ns.redComponent), Float(ns.greenComponent), Float(ns.blueComponent))
+    }
+    
+    public var secondarySIMD: SIMD3<Float> {
+        let ns = NSColor(secondaryGlow).usingColorSpace(.deviceRGB) ?? NSColor(red: 0.3, green: 0.6, blue: 0.95, alpha: 1.0)
+        return SIMD3<Float>(Float(ns.redComponent), Float(ns.greenComponent), Float(ns.blueComponent))
     }
 }
 
@@ -91,4 +116,3 @@ public final class ColorPaletteManager: ObservableObject {
         )
     }
 }
-

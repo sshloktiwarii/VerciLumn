@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import ScreenCaptureKit
 import Accelerate
+import CoreMedia
 import Combine
 
 public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Sendable, SCStreamOutput, SCStreamDelegate {
@@ -8,12 +9,16 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
     
     @Published public private(set) var beatIntensity: Float = 0.0
     @Published public private(set) var isCapturing: Bool = false
+    @Published public private(set) var isHardwareCaptureActive: Bool = false
     
     public var onBeatPulse: ((Float) -> Void)?
     
     private var stream: SCStream?
     private let audioQueue = DispatchQueue(label: "com.vercilumn.audio.beat", qos: .userInteractive)
     private var simulatedTimer: AnyCancellable?
+    
+    private var lastPublishTime: TimeInterval = 0
+    private let throttleInterval: TimeInterval = 1.0 / 45.0 // 45 FPS max update rate
     
     private override init() {
         super.init()
@@ -47,6 +52,7 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
                 DispatchQueue.main.async {
                     self.stream = stream
                     self.isCapturing = true
+                    self.isHardwareCaptureActive = true
                     self.simulatedTimer?.cancel()
                     self.simulatedTimer = nil
                 }
@@ -67,6 +73,7 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
         }
         DispatchQueue.main.async {
             self.isCapturing = false
+            self.isHardwareCaptureActive = false
             self.beatIntensity = 0.0
         }
     }
@@ -75,21 +82,28 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.isCapturing = true
+            self.isHardwareCaptureActive = false
             var phase: Float = 0.0
             self.simulatedTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common)
                 .autoconnect()
                 .sink { [weak self] _ in
+                    guard let self = self else { return }
+                    // Freeze updates when no track is playing to keep CPU at 0% and MacBook cool
+                    guard PlaybackManager.shared.currentTrack.isPlaying else {
+                        if self.beatIntensity > 0 {
+                            self.beatIntensity = 0
+                            self.onBeatPulse?(0)
+                        }
+                        return
+                    }
                     phase += 0.06
                     let raw = (sin(phase) + sin(phase * 2.3) + 2.0) / 4.0
                     let pulse = max(0.0, (raw - 0.45) * 1.5)
-                    self?.beatIntensity = pulse
-                    self?.onBeatPulse?(pulse)
+                    self.beatIntensity = pulse
+                    self.onBeatPulse?(pulse)
                 }
         }
     }
-    
-    private var lastPublishTime: TimeInterval = 0
-    private let throttleInterval: TimeInterval = 1.0 / 45.0 // 45 FPS max update rate to eliminate CPU burn
 
     public func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
@@ -109,12 +123,41 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
         )
         guard status == kCMBlockBufferNoErr, let data = dataPtr, length > 0 else { return }
         
-        let floatCount = length / MemoryLayout<Float>.size
-        guard floatCount > 0 else { return }
-        
-        let samples = data.withMemoryRebound(to: Float.self, capacity: floatCount) {
-            Array(UnsafeBufferPointer(start: $0, count: floatCount))
+        // Inspect format description to safely extract float vs int samples
+        var samples: [Float] = []
+        if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+           let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee {
+            let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+            let bytesPerSample = Int(asbd.mBitsPerChannel / 8)
+            
+            if isFloat && bytesPerSample == MemoryLayout<Float>.size {
+                let floatCount = length / MemoryLayout<Float>.size
+                samples = data.withMemoryRebound(to: Float.self, capacity: floatCount) {
+                    Array(UnsafeBufferPointer(start: $0, count: floatCount))
+                }
+            } else if !isFloat && bytesPerSample == 2 {
+                // 16-bit signed integer PCM -> Float conversion
+                let int16Count = length / 2
+                let int16Samples = data.withMemoryRebound(to: Int16.self, capacity: int16Count) {
+                    Array(UnsafeBufferPointer(start: $0, count: int16Count))
+                }
+                samples = [Float](repeating: 0, count: int16Count)
+                var scale: Float = 1.0 / 32768.0
+                vDSP_vflt16(int16Samples, 1, &samples, 1, vDSP_Length(int16Count))
+                vDSP_vsmul(samples, 1, &scale, &samples, 1, vDSP_Length(int16Count))
+            }
         }
+        
+        // Fallback if format description was missing
+        if samples.isEmpty {
+            let floatCount = length / MemoryLayout<Float>.size
+            guard floatCount > 0 else { return }
+            samples = data.withMemoryRebound(to: Float.self, capacity: floatCount) {
+                Array(UnsafeBufferPointer(start: $0, count: floatCount))
+            }
+        }
+        
+        guard !samples.isEmpty else { return }
         
         // Compute RMS of frame buffer using Accelerate vDSP
         var rms: Float = 0.0

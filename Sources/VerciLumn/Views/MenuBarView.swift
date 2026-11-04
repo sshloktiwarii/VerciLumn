@@ -7,15 +7,14 @@ public struct MenuBarView: View {
     @ObservedObject var semanticEngine = WordSemanticEngine.shared
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var hotkeys = HotKeyManager.shared
+    @ObservedObject var settings = AppSettings.shared
     
-    @Binding var currentStyle: LyricStyle
-    @Binding var isBezelEnabled: Bool
-    @Binding var glowSensitivity: Double
-    @Binding var displayMode: WindowDisplayMode
-    @Binding var backdropMode: BackdropMode
-    @Binding var timingOffset: Double
-    @Binding var textScale: Double
+    @State private var areFeaturesExpanded: Bool = true
+    @State private var areAdjustmentsExpanded: Bool = false
     
+    public init() {}
+    
+    // Backward-compatible init with bindings
     public init(
         currentStyle: Binding<LyricStyle>,
         isBezelEnabled: Binding<Bool>,
@@ -25,250 +24,422 @@ public struct MenuBarView: View {
         timingOffset: Binding<Double>,
         textScale: Binding<Double>
     ) {
-        self._currentStyle = currentStyle
-        self._isBezelEnabled = isBezelEnabled
-        self._glowSensitivity = glowSensitivity
-        self._displayMode = displayMode
-        self._backdropMode = backdropMode
-        self._timingOffset = timingOffset
-        self._textScale = textScale
+        self.init()
     }
     
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
-                // Header & Now Playing
-                HStack(spacing: 10) {
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 26))
-                        .foregroundColor(theme.activePalette.highlightAccent)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("VerciLumn Engine")
-                            .font(.system(size: 15, weight: .bold))
-                        Text(playback.currentTrack.isPlaying ? "\(playback.currentTrack.title) • \(playback.currentTrack.artist)" : "No Music Playing")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
+                // MARK: 1. Header & Now Playing Card
+                nowPlayingHeader
+                
+                // Permission Alert (if needed)
+                if !hotkeys.isAccessibilityGranted {
+                    accessibilityAlertBanner
                 }
-                .padding(.bottom, 2)
                 
                 Divider()
                 
-                // 1. Display Placement
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("WINDOW LAYER")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.secondary)
-                    
-                    Picker("", selection: $displayMode) {
-                        ForEach(WindowDisplayMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .onChange(of: displayMode) { _, newMode in
-                        windowManager.setDisplayMode(newMode)
-                    }
-                }
+                // MARK: 2. Core Layout Dropdown Pickers
+                coreLayoutDropdowns
                 
-                // 2. Backdrop Style
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("CANVAS BACKDROP")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.secondary)
-                    
-                    Picker("", selection: $backdropMode) {
-                        ForEach(BackdropMode.allCases) { bMode in
-                            Text(bMode.rawValue).tag(bMode)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
+                Divider()
                 
-                // 3. Lyric Visual Theme
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("ANIMATION THEME")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.secondary)
-                    
-                    Picker("", selection: $currentStyle) {
-                        ForEach(LyricStyle.allCases) { style in
-                            Text(style.rawValue).tag(style)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-                
-                // 4. Color Palette & Typography Presets
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("COLOR PALETTE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
+                // MARK: 3. Features & Add-ons (Collapsible Dropdown Menu)
+                DisclosureGroup(isExpanded: $areFeaturesExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Feature A: Camera Notch Audio Capsule
+                        featureRow(
+                            icon: "inset.filled.topthird.rectangle",
+                            title: "Camera Notch Audio Capsule",
+                            shortcut: "⌘⇧N",
+                            description: "Displays current singing word and audio spectrum around the camera notch.",
+                            isOn: $settings.isNotchHUDEnabled
+                        )
                         
-                        Picker("", selection: Binding(
-                            get: { theme.currentTheme },
-                            set: { theme.setTheme($0) }
-                        )) {
-                            ForEach(ColorThemePreset.allCases) { t in
-                                Text(t.rawValue).tag(t)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("TYPOGRAPHY")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
+                        // Feature B: Interactive Lyric Seek
+                        featureRow(
+                            icon: "hand.tap.fill",
+                            title: "Interactive Line & Word Seeking",
+                            shortcut: nil,
+                            description: "Click any lyric line to rewind or jump, or drag the bottom scrubber.",
+                            isOn: $settings.isInteractiveSeekEnabled
+                        )
                         
-                        Picker("", selection: Binding(
-                            get: { theme.currentTypography },
-                            set: { theme.setTypography($0) }
-                        )) {
-                            ForEach(TypographyStyle.allCases) { font in
-                                Text(font.rawValue).tag(font)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
+                        // Feature C: Screen Border Glow
+                        featureRow(
+                            icon: "rectangle.inset.filled",
+                            title: "Display Border Glow Pulse",
+                            shortcut: nil,
+                            description: "Pulses the outer display edges on low-frequency audio transients.",
+                            isOn: $settings.isBezelEnabled
+                        )
+                        
+                        // Feature D: Metal Fisheye Lens
+                        featureRow(
+                            icon: "circle.circle",
+                            title: "Metal Lens Distortion Shader",
+                            shortcut: nil,
+                            description: "GPU spherical lens distortion focused on the active lyric word.",
+                            isOn: $settings.isFisheyeShaderEnabled
+                        )
+                        
+                        // Feature E: Semantic Word Icons
+                        featureRow(
+                            icon: "sparkles",
+                            title: "Contextual Word Icons",
+                            shortcut: nil,
+                            description: "Renders SF Symbols above matching semantic lyric tokens.",
+                            isOn: $semanticEngine.isEnabled
+                        )
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    HStack {
+                        Image(systemName: "slider.horizontal.2.square")
+                            .foregroundColor(theme.activePalette.highlightAccent)
+                        Text("OPTIONAL MODULES")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.primary)
                     }
                 }
                 
                 Divider()
                 
-                // 5. Semantic Word VFX (Fire, Ice, Speed, Love, Impact)
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Semantic Word VFX Engine", isOn: $semanticEngine.isEnabled)
-                        .font(.system(size: 13, weight: .medium))
-                    
-                    if semanticEngine.isEnabled {
-                        HStack {
-                            Text("VFX Intensity")
-                                .font(.system(size: 11))
+                // MARK: 4. Fine-Tuning & Adjustments (Collapsible Dropdown Menu)
+                DisclosureGroup(isExpanded: $areAdjustmentsExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Text Size
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("Text Scale")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Spacer()
+                                Text(String(format: "%.1fx", settings.textScale))
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                            HStack(spacing: 8) {
+                                Slider(value: $settings.textScale, in: 0.7...2.2, step: 0.1)
+                                Button("Reset") { settings.textScale = 1.0 }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.mini)
+                            }
+                        }
+                        
+                        // Vocal Timing Offset
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("Vocal Timing Offset")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Spacer()
+                                Text(String(format: "%+.2fs", settings.timingOffset))
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                            Text("Use ⌘+[ and ⌘+] to adjust sync latency.")
+                                .font(.system(size: 9))
                                 .foregroundColor(.secondary)
-                            Slider(value: $semanticEngine.intensity, in: 0.5...1.5, step: 0.1)
-                            Text(String(format: "%.1fx", semanticEngine.intensity))
-                                .font(.system(size: 11, design: .monospaced))
-                                .frame(width: 32)
+                            HStack(spacing: 8) {
+                                Slider(value: $settings.timingOffset, in: -1.5...1.5, step: 0.05)
+                                Button("0.0s") { settings.timingOffset = 0.0 }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.mini)
+                            }
                         }
+                        
+                        // Bezel Sensitivity
+                        if settings.isBezelEnabled {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack {
+                                    Text("Border Pulse Sensitivity")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Spacer()
+                                    Text(String(format: "%.1fx", settings.glowSensitivity))
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+                                Slider(value: $settings.glowSensitivity, in: 0.5...2.5, step: 0.1)
+                            }
+                        }
+                        
+                        // Auto Screensaver
+                        Toggle("Activate screensaver after 60s idle", isOn: $hotkeys.isIdleScreensaverEnabled)
+                            .font(.system(size: 11, weight: .medium))
+                            
+                        // Font Style Typography
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Typography")
+                                .font(.system(size: 11, weight: .semibold))
+                            Picker("", selection: Binding(
+                                get: { theme.currentTypography },
+                                set: { theme.setTypography($0) }
+                            )) {
+                                ForEach(TypographyStyle.allCases) { font in
+                                    Text(font.rawValue).tag(font)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                        }
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    HStack {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundColor(.secondary)
+                        Text("FINE TUNING & LATENCY")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.primary)
                     }
                 }
                 
                 Divider()
                 
-                // 6. Text Size Scale Slider
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("TEXT SIZE SCALE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(String(format: "%.1fx", textScale))
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    }
-                    
-                    HStack(spacing: 8) {
-                        Slider(value: $textScale, in: 0.7...2.2, step: 0.1)
-                        Button("1x") {
-                            textScale = 1.0
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                }
-                
-                // 7. Vocal Sync Calibration Slider
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("VOCAL SYNC OFFSET")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(String(format: "%+.2fs", timingOffset))
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    }
-                    
-                    HStack(spacing: 8) {
-                        Slider(value: $timingOffset, in: -1.5...1.5, step: 0.05)
-                        Button("0s") {
-                            timingOffset = 0.0
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                }
-                
-                Divider()
-                
-                // 8. Global Shortcuts & Screensaver Daemon
+                // MARK: 5. Battery & Laptop Thermals
                 VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Auto Screensaver on Inactivity (60s)", isOn: $hotkeys.isIdleScreensaverEnabled)
-                        .font(.system(size: 12, weight: .medium))
-                    
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("SHORTCUTS:")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.secondary)
-                        Text("⌘+⇧+L (Toggle Stage) • ⌘+⌥+→ (Next Theme) • ⌘+[ / ⌘+] (Sync ±50ms)")
+                    Toggle(isOn: $settings.isLowPowerModeEnabled) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "leaf.fill")
+                                .foregroundColor(.green)
+                            Text("Cool Laptop / Low Power Mode")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                    }
+                    Text("Limits background animations to 30 FPS and halts rendering when music stops to prevent heating and fan noise.")
+                        .font(.system(size: 9.5))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                Divider()
+                
+                // MARK: 6. Diagnostics & Quit
+                footerDiagnostics
+            }
+            .padding(16)
+        }
+        .frame(width: 380, height: 600)
+    }
+    
+    // MARK: - Now Playing Header
+    private var nowPlayingHeader: some View {
+        HStack(spacing: 12) {
+            if let art = playback.currentTrack.artwork {
+                Image(nsImage: art)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 42, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(theme.activePalette.highlightAccent)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(playback.currentTrack.title.isEmpty ? "VerciLumn Engine" : playback.currentTrack.title)
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                
+                Text(playback.currentTrack.artist.isEmpty ? "Play song in Spotify or Apple Music" : "\(playback.currentTrack.artist) • \(playback.currentTrack.playerSource)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            // Media Controls
+            HStack(spacing: 6) {
+                Button {
+                    playback.previousTrack()
+                } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    playback.togglePlayPause()
+                } label: {
+                    Image(systemName: playback.currentTrack.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.activePalette.highlightAccent)
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    playback.nextTrack()
+                } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+    
+    // MARK: - Accessibility Permission Banner
+    private var accessibilityAlertBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Accessibility Needed for Hotkeys")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Allow in System Settings to use ⌘+⇧+L, ⌘+⇧+N, etc.")
+                    .font(.system(size: 9.5))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button("Grant") {
+                hotkeys.openAccessibilitySettings()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
+    }
+    
+    // MARK: - Core Layout Dropdowns
+    private var coreLayoutDropdowns: some View {
+        VStack(spacing: 10) {
+            // Dropdown 1: Window Layer Mode
+            dropdownPicker(
+                label: "DISPLAY PRESENTATION",
+                sublabel: "Screen elevation, lock screen activation, and desktop layering",
+                selection: $settings.displayMode
+            ) {
+                Text("Full Screen Stage").tag(WindowDisplayMode.fullStage)
+                Text("Lock Screen Only (Hidden when unlocked)").tag(WindowDisplayMode.lockScreenAndStage)
+                Text("Desktop Wallpaper (Behind active apps)").tag(WindowDisplayMode.desktop)
+                Text("Floating Overlay (Top layer)").tag(WindowDisplayMode.floating)
+            }
+            .onChange(of: settings.displayMode) { _, newMode in
+                windowManager.setDisplayMode(newMode)
+            }
+            
+            // Dropdown 2: Lyric Text Color Palette
+            dropdownPicker(
+                label: "COLOR PALETTE",
+                sublabel: "Active lyric typography, badges, and transient highlights",
+                selection: Binding(
+                    get: { theme.currentTheme },
+                    set: { theme.setTheme($0) }
+                )
+            ) {
+                ForEach(ColorThemePreset.allCases) { preset in
+                    Text(preset.rawValue).tag(preset)
+                }
+            }
+            
+            // Dropdown 3: Animation Theme Style
+            dropdownPicker(
+                label: "LYRIC PRESENTATION",
+                sublabel: "Interactive line reel, 3D typography, or crossfade stack",
+                selection: $settings.lyricStyle
+            ) {
+                Text("Interactive Line Reel (Current & Next Line)").tag(LyricStyle.verciReel)
+                Text("3D Vinyl Turntable").tag(LyricStyle.turntable)
+                Text("3D Perspective Horizon").tag(LyricStyle.neonHorizon)
+                Text("Monospace Telemetry").tag(LyricStyle.cyberpunk)
+                Text("Cinematic Crossfade Stack").tag(LyricStyle.cinematicStack)
+            }
+            
+            // Dropdown 4: Canvas Backdrop
+            dropdownPicker(
+                label: "BACKGROUND BACKDROP",
+                sublabel: "Atmospheric visualizer or transparent pass-through",
+                selection: $settings.backdropMode
+            ) {
+                Text("Hypnotic Geometric Tunnel (Dark Stage)").tag(BackdropMode.infiniteZoom)
+                Text("Audio Particle Field (Dark Stage)").tag(BackdropMode.particleCosmos)
+                Text("Cinematic Dark (Pure Black)").tag(BackdropMode.oledBlack)
+                Text("Transparent (Pass-Through to Desktop)").tag(BackdropMode.transparent)
+            }
+        }
+    }
+    
+    // MARK: - Helper Dropdown Picker Component
+    private func dropdownPicker<T: Hashable, Content: View>(
+        label: String,
+        sublabel: String,
+        selection: Binding<T>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            Picker("", selection: selection) {
+                content()
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            
+            Text(sublabel)
+                .font(.system(size: 9.5))
+                .foregroundColor(.secondary.opacity(0.8))
+        }
+    }
+    
+    // MARK: - Helper Feature Row Component
+    private func featureRow(
+        icon: String,
+        title: String,
+        shortcut: String?,
+        description: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle(isOn: isOn) {
+                HStack(spacing: 6) {
+                    Image(systemName: icon)
+                        .foregroundColor(isOn.wrappedValue ? theme.activePalette.highlightAccent : .secondary)
+                        .frame(width: 16)
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                    if let sc = shortcut {
+                        Text("(\(sc))")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
-                    .padding(.top, 2)
-                }
-                
-                Divider()
-                
-                // 9. Bezel Glow Controls
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Beat-Reactive Bezel Glow", isOn: $isBezelEnabled)
-                        .font(.system(size: 13, weight: .medium))
-                    
-                    if isBezelEnabled {
-                        HStack {
-                            Text("Sensitivity")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            Slider(value: $glowSensitivity, in: 0.5...2.5, step: 0.1)
-                            Text(String(format: "%.1fx", glowSensitivity))
-                                .font(.system(size: 11, design: .monospaced))
-                                .frame(width: 32)
-                        }
-                    }
-                }
-                
-                Divider()
-                
-                // 10. Diagnostics & Quit
-                HStack {
-                    Circle()
-                        .fill(audio.isCapturing ? Color.green : Color.orange)
-                        .frame(width: 8, height: 8)
-                    Text(audio.isCapturing ? "Engine: 8-Band vDSP FFT" : "Engine Idle")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    Button(role: .destructive) {
-                        NSApplication.shared.terminate(nil)
-                    } label: {
-                        Text("Quit")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
             }
-            .padding(18)
+            Text(description)
+                .font(.system(size: 9.5))
+                .foregroundColor(.secondary)
+                .padding(.leading, 22)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(width: 360, height: 600)
+    }
+    
+    // MARK: - Footer Diagnostics
+    private var footerDiagnostics: some View {
+        HStack {
+            Circle()
+                .fill(playback.currentTrack.isPlaying ? Color.green : Color.secondary.opacity(0.5))
+                .frame(width: 8, height: 8)
+            
+            Text(playback.currentTrack.isPlaying ? "Active: \(playback.currentTrack.playerSource)" : "Idle (0% CPU)")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            Button(role: .destructive) {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Text("Quit VerciLumn")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
     }
 }
