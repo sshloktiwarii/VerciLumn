@@ -42,6 +42,11 @@ public struct TrackState: Equatable {
     public var exactPosition: TimeInterval {
         return exactPosition(withOffset: 0)
     }
+    
+    public var progress: Double {
+        guard duration > 0 else { return 0.0 }
+        return min(max(exactPosition / duration, 0.0), 1.0)
+    }
 }
 
 public final class PlaybackManager: ObservableObject {

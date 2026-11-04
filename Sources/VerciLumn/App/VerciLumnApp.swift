@@ -3,11 +3,17 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Run as background agent without Dock icon
+        // Run as background accessory without Dock icon
         NSApp.setActivationPolicy(.accessory)
+        
+        // Suppress automatic window tabbing warning on command-line SPM binaries
+        NSWindow.allowsAutomaticWindowTabbing = false
         
         // Start non-invasive audio capture
         AudioBeatEngine.shared.startCapture()
+        
+        // Wire up Global System Hotkeys
+        setupHotKeys()
         
         // Setup lockscreen/desktop overlays on startup
         setupOverlays()
@@ -23,6 +29,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc private func handleScreenChange() {
         setupOverlays()
+    }
+    
+    private func setupHotKeys() {
+        let hotkeys = HotKeyManager.shared
+        
+        // ⌘ + ⇧ + L -> Toggle Full Stage Immersion
+        hotkeys.onToggleStage = {
+            let current = OverlayWindowManager.shared.currentMode
+            let next: WindowDisplayMode = (current == .fullStage) ? .desktop : .fullStage
+            OverlayWindowManager.shared.setDisplayMode(next)
+            UserDefaults.standard.set(next.rawValue, forKey: "vercilumn_display_mode")
+        }
+        
+        // ⌘ + ⌥ + → -> Cycle Animation Theme
+        hotkeys.onCycleStyle = {
+            let currentRaw = UserDefaults.standard.string(forKey: "vercilumn_lyric_style") ?? LyricStyle.verciReel.rawValue
+            let all = LyricStyle.allCases
+            let idx = all.firstIndex(where: { $0.rawValue == currentRaw }) ?? 0
+            let nextStyle = all[(idx + 1) % all.count]
+            UserDefaults.standard.set(nextStyle.rawValue, forKey: "vercilumn_lyric_style")
+        }
+        
+        // ⌘ + [ / ⌘ + ] -> Adjust vocal sync timing offset
+        hotkeys.onAdjustOffset = { delta in
+            let cur = UserDefaults.standard.double(forKey: "vercilumn_timing_offset")
+            let newOffset = min(max(cur + delta, -2.0), 2.0)
+            UserDefaults.standard.set(newOffset, forKey: "vercilumn_timing_offset")
+        }
     }
     
     private func setupOverlays() {

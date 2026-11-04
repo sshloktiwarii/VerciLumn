@@ -14,6 +14,7 @@ public struct RootOverlayView: View {
     @ObservedObject var lyrics = LyricsFetcher.shared
     @ObservedObject var palette = ColorPaletteManager.shared
     @ObservedObject var audio = AudioBeatEngine.shared
+    @ObservedObject var theme = ThemeManager.shared
     
     @Binding var currentStyle: LyricStyle
     @Binding var isBezelEnabled: Bool
@@ -58,7 +59,14 @@ public struct RootOverlayView: View {
             }
             .padding(.horizontal, 20)
             
-            // 4. Now Playing Frosted Acrylic Glass Card (Bottom Left)
+            // 4. Ambient Floor Spectrum Bars (Dancing along bottom edge)
+            VStack {
+                Spacer()
+                AmbientFloorBarsView()
+                    .padding(.bottom, 8)
+            }
+            
+            // 5. Now Playing Frosted Acrylic Glass Card (Bottom Left)
             VStack {
                 Spacer()
                 HStack {
@@ -98,8 +106,8 @@ public struct RootOverlayView: View {
                 
                 RadialGradient(
                     gradient: Gradient(colors: [
-                        palette.currentPalette.highlightAccent.opacity(0.18),
-                        palette.currentPalette.secondaryGlow.opacity(0.08),
+                        theme.activePalette.highlightAccent.opacity(0.18),
+                        theme.activePalette.secondaryGlow.opacity(0.08),
                         Color.clear
                     ]),
                     center: .center,
@@ -113,14 +121,14 @@ public struct RootOverlayView: View {
                 Color.black
                 
                 Circle()
-                    .fill(palette.currentPalette.highlightAccent.opacity(0.35))
+                    .fill(theme.activePalette.highlightAccent.opacity(0.35))
                     .frame(width: 600, height: 600)
                     .blur(radius: 120)
                     .offset(x: -250, y: -100)
                     .scaleEffect(1.0 + CGFloat(audio.beatIntensity) * 0.25)
                 
                 Circle()
-                    .fill(palette.currentPalette.secondaryGlow.opacity(0.3))
+                    .fill(theme.activePalette.secondaryGlow.opacity(0.3))
                     .frame(width: 550, height: 550)
                     .blur(radius: 130)
                     .offset(x: 200, y: 150)

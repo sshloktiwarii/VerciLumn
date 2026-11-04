@@ -123,6 +123,9 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
         // Scale, clamp and apply non-linear bass thresholding
         let pulse = min(max((rms - 0.03) * 5.0, 0.0), 1.0)
         
+        // Pass samples to Multi-Band Spectrum Engine
+        AudioSpectrumEngine.shared.processAudio(samples: samples)
+        
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.beatIntensity = pulse

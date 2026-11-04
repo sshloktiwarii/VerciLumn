@@ -2,6 +2,7 @@ import SwiftUI
 
 public enum LyricStyle: String, CaseIterable, Identifiable {
     case verciReel = "Verci Kinetic Reel (Official)"
+    case turntable = "3D Holographic Vinyl Turntable"
     case neonHorizon = "Neon Horizon (3D Perspective)"
     case cyberpunk = "Cyberpunk Telemetry"
     case cinematicStack = "Cinematic Crossfade Stack"
@@ -13,6 +14,8 @@ public struct VerciLyricsView: View {
     @ObservedObject var playback = PlaybackManager.shared
     @ObservedObject var lyrics = LyricsFetcher.shared
     @ObservedObject var palette = ColorPaletteManager.shared
+    @ObservedObject var audio = AudioBeatEngine.shared
+    @ObservedObject var theme = ThemeManager.shared
     
     var style: LyricStyle = .verciReel
     var timingOffset: Double = 0.0
@@ -28,21 +31,26 @@ public struct VerciLyricsView: View {
         let currentTime = playback.currentTrack.exactPosition(withOffset: timingOffset)
         let lines = lyrics.currentLyrics.lines
         let activeLineIndex = lyrics.currentLyrics.activeLineIndex(at: currentTime) ?? 0
+        let activeColor = theme.activePalette.highlightAccent
         
         ZStack {
-            if lines.isEmpty {
-                VStack(spacing: 14) {
+            if style == .turntable {
+                turntableModeView(lines: lines, activeIndex: activeLineIndex, currentTime: currentTime)
+            } else if lines.isEmpty {
+                VStack(spacing: 16) {
                     Image(systemName: "waveform.path")
                         .font(.system(size: 48 * textScale))
-                        .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.4))
+                        .foregroundColor(activeColor.opacity(0.4))
                     Text(lyrics.isLoading ? "Fetching synchronized lyrics..." : (playback.currentTrack.isPlaying ? "Instrumental or lyrics unavailable" : "Play music in Spotify or Apple Music"))
-                        .font(.system(size: 20 * textScale, weight: .medium, design: .rounded))
+                        .font(.system(size: 20 * textScale, weight: .medium, design: theme.currentTypography.design))
                         .foregroundColor(.white.opacity(0.55))
                 }
             } else {
                 switch style {
                 case .verciReel:
                     verciKineticReelView(lines: lines, activeLineIdx: activeLineIndex, currentTime: currentTime)
+                case .turntable:
+                    EmptyView()
                 case .neonHorizon:
                     neonHorizonView(lines: lines, activeIndex: activeLineIndex, currentTime: currentTime)
                 case .cyberpunk:
@@ -56,7 +64,7 @@ public struct VerciLyricsView: View {
         .padding(.horizontal, 32)
     }
     
-    // MARK: - Style 1: Verci Kinetic Reel (Full Screen Scaling)
+    // MARK: - Style 1: Verci Kinetic Reel (Official Reel with Semantic Word VFX)
     private func verciKineticReelView(lines: [LyricLine], activeLineIdx: Int, currentTime: TimeInterval) -> some View {
         let allWords: [WordToken] = lines.flatMap { $0.words }
         guard !allWords.isEmpty else {
@@ -79,79 +87,101 @@ public struct VerciLyricsView: View {
         let prevWord = activeWordIdx > 0 ? allWords[activeWordIdx - 1] : nil
         let currentWord = allWords[activeWordIdx]
         let nextWord = (activeWordIdx + 1 < allWords.count) ? allWords[activeWordIdx + 1] : nil
-        let symbol = WordIconMapper.shared.symbol(for: currentWord.text)
         
-        let activeFontSize = 84.0 * textScale
-        let secondaryFontSize = 42.0 * textScale
+        let activeFontSize = 82.0 * textScale
+        let secondaryFontSize = 38.0 * textScale
+        let activeColor = theme.activePalette.highlightAccent
         
         return AnyView(
-            VStack(spacing: 32 * textScale) {
-                // Previous Word
-                if let prev = prevWord {
-                    Text(prev.text)
-                        .font(.system(size: secondaryFontSize, weight: .bold, design: .rounded))
-                        .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.35))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                }
+            ZStack {
+                // Liquid Audio Waveform Ring Pulsing in the background
+                LiquidWaveformRingView(size: 380 * textScale)
+                    .opacity(0.35)
                 
-                // Active Center Word (Giant Billboard with Sticker Block)
-                HStack(spacing: 20 * textScale) {
-                    if let icon = symbol {
-                        Image(systemName: icon)
-                            .font(.system(size: activeFontSize * 0.65, weight: .black))
-                            .foregroundColor(palette.currentPalette.highlightAccent)
+                VStack(spacing: 30 * textScale) {
+                    // Previous Word (Fading upward)
+                    if let prev = prevWord {
+                        Text(prev.text)
+                            .font(.system(size: secondaryFontSize, weight: .bold, design: theme.currentTypography.design))
+                            .foregroundColor(activeColor.opacity(0.35))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
                     
-                    Text(currentWord.text)
-                        .font(.system(size: activeFontSize, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 36 * textScale)
-                        .padding(.vertical, 14 * textScale)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16 * textScale, style: .continuous)
-                                .fill(palette.currentPalette.highlightAccent.opacity(0.88))
-                                .shadow(color: palette.currentPalette.highlightAccent.opacity(0.6), radius: 24 * textScale, x: 0, y: 8)
-                        )
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                }
-                .animation(.spring(response: 0.28, dampingFraction: 0.72), value: currentWord.id)
-                
-                // Next Word
-                if let next = nextWord {
-                    HStack(spacing: 12) {
-                        if let nextIcon = WordIconMapper.shared.symbol(for: next.text) {
-                            Image(systemName: nextIcon)
-                                .font(.system(size: secondaryFontSize * 0.6, weight: .bold))
-                                .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.3))
+                    // Active Semantic Word VFX (Typography, bespoke badge, particle bursts)
+                    SemanticWordView(
+                        word: currentWord.text,
+                        fontSize: activeFontSize,
+                        accentColor: activeColor,
+                        beatIntensity: audio.beatIntensity
+                    )
+                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: currentWord.id)
+                    
+                    // Next Word (Approaching)
+                    if let next = nextWord {
+                        HStack(spacing: 10) {
+                            if let nextIcon = WordIconMapper.shared.symbol(for: next.text) {
+                                Image(systemName: nextIcon)
+                                    .font(.system(size: secondaryFontSize * 0.6, weight: .bold))
+                                    .foregroundColor(activeColor.opacity(0.3))
+                            }
+                            Text(next.text)
+                                .font(.system(size: secondaryFontSize, weight: .bold, design: theme.currentTypography.design))
+                                .foregroundColor(activeColor.opacity(0.35))
                         }
-                        Text(next.text)
-                            .font(.system(size: secondaryFontSize, weight: .bold, design: .rounded))
-                            .foregroundColor(palette.currentPalette.highlightAccent.opacity(0.35))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                     }
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
                 }
+                .animation(.easeInOut(duration: 0.2), value: activeWordIdx)
             }
-            .animation(.easeInOut(duration: 0.2), value: activeWordIdx)
         )
     }
     
-    // MARK: - Style 2: Neon Horizon (3D Perspective)
+    // MARK: - Style 2: 3D Holographic Vinyl Turntable Mode
+    private func turntableModeView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
+        let currentLine = (!lines.isEmpty && activeIndex < lines.count) ? lines[activeIndex].fullText : playback.currentTrack.title
+        let activeColor = theme.activePalette.highlightAccent
+        
+        return VStack(spacing: 36 * textScale) {
+            // Interactive 33 RPM Grooved Vinyl with Tonearm
+            VinylTurntableView(size: min(440 * textScale, 560))
+            
+            // Active Sung Lyric Line Caption below vinyl
+            VStack(spacing: 8) {
+                Text(currentLine)
+                    .font(.system(size: 32 * textScale, weight: .black, design: theme.currentTypography.design))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .shadow(color: activeColor.opacity(0.6), radius: 18)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: activeIndex)
+                
+                if !lyrics.currentLyrics.source.isEmpty {
+                    Text("SYNCED VIA \(lyrics.currentLyrics.source.uppercased())")
+                        .font(.system(size: 10 * textScale, weight: .bold, design: .monospaced))
+                        .foregroundColor(activeColor.opacity(0.5))
+                        .tracking(2)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Style 3: Neon Horizon (3D Perspective)
     private func neonHorizonView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
         let baseFontSize = 46.0 * textScale
+        let activeColor = theme.activePalette.highlightAccent
         
-        return VStack(spacing: 30 * textScale) {
+        return VStack(spacing: 28 * textScale) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 3), id: \.self) { idx in
                 let line = lines[idx]
                 let distance = idx - activeIndex
                 let isActive = distance == 0
                 
                 Text(line.fullText)
-                    .font(.system(size: baseFontSize, weight: isActive ? .black : .bold, design: .rounded))
-                    .foregroundColor(isActive ? palette.currentPalette.highlightAccent : .white.opacity(0.25))
-                    .shadow(color: isActive ? palette.currentPalette.highlightAccent.opacity(0.7) : .clear, radius: 20 * textScale)
+                    .font(.system(size: baseFontSize, weight: isActive ? .black : .bold, design: theme.currentTypography.design))
+                    .foregroundColor(isActive ? activeColor : .white.opacity(0.25))
+                    .shadow(color: isActive ? activeColor.opacity(0.7) : .clear, radius: 20 * textScale)
                     .rotation3DEffect(
                         .degrees(Double(distance) * -16),
                         axis: (x: 1.0, y: 0.0, z: 0.0),
@@ -164,40 +194,42 @@ public struct VerciLyricsView: View {
         }
     }
     
-    // MARK: - Style 3: Cyberpunk Telemetry
+    // MARK: - Style 4: Cyberpunk Telemetry
     private func cyberpunkView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
         let currentLine = lines[activeIndex]
-        let activeFontSize = 52.0 * textScale
+        let activeFontSize = 50.0 * textScale
+        let activeColor = theme.activePalette.highlightAccent
         
         return VStack(spacing: 20 * textScale) {
-            Text("// AUDIO_TRACK //")
+            Text("// SYSTEM_AUDIO_SYNC //")
                 .font(.system(size: 13 * textScale, weight: .bold, design: .monospaced))
-                .foregroundColor(palette.currentPalette.secondaryGlow.opacity(0.7))
+                .foregroundColor(theme.activePalette.secondaryGlow.opacity(0.7))
                 .tracking(4)
             
             HStack(spacing: 12) {
                 Text("[")
                     .font(.system(size: activeFontSize, weight: .black, design: .monospaced))
-                    .foregroundColor(palette.currentPalette.highlightAccent)
+                    .foregroundColor(activeColor)
                 
                 Text(currentLine.fullText.uppercased())
                     .font(.system(size: activeFontSize, weight: .black, design: .monospaced))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
-                    .shadow(color: palette.currentPalette.highlightAccent.opacity(0.7), radius: 15)
+                    .shadow(color: activeColor.opacity(0.7), radius: 15)
                 
                 Text("]")
                     .font(.system(size: activeFontSize, weight: .black, design: .monospaced))
-                    .foregroundColor(palette.currentPalette.highlightAccent)
+                    .foregroundColor(activeColor)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: activeIndex)
         }
     }
     
-    // MARK: - Style 4: Cinematic Crossfade Stack
+    // MARK: - Style 5: Cinematic Crossfade Stack
     private func cinematicStackView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
         let baseFontSize = 48.0 * textScale
+        let activeColor = theme.activePalette.highlightAccent
         
         return VStack(spacing: 28 * textScale) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 2), id: \.self) { idx in
@@ -205,9 +237,9 @@ public struct VerciLyricsView: View {
                 let isActive = idx == activeIndex
                 
                 Text(line.fullText)
-                    .font(.system(size: isActive ? baseFontSize : baseFontSize * 0.65, weight: isActive ? .heavy : .semibold, design: .rounded))
+                    .font(.system(size: isActive ? baseFontSize : baseFontSize * 0.65, weight: isActive ? .heavy : .semibold, design: theme.currentTypography.design))
                     .foregroundColor(isActive ? .white : .white.opacity(0.28))
-                    .shadow(color: isActive ? palette.currentPalette.highlightAccent.opacity(0.5) : .clear, radius: 16)
+                    .shadow(color: isActive ? activeColor.opacity(0.5) : .clear, radius: 16)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .padding(.horizontal, 24)

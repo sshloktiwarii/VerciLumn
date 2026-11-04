@@ -1,0 +1,122 @@
+import AppKit
+import Combine
+
+public final class HotKeyManager: ObservableObject {
+    public static let shared = HotKeyManager()
+    
+    @Published public var isIdleScreensaverEnabled: Bool = true
+    @Published public var idleThresholdSeconds: Double = 60.0
+    
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+    private var idleCheckTimer: AnyCancellable?
+    private var isCurrentlyInAutoScreensaver: Bool = false
+    private var previousDisplayMode: WindowDisplayMode = .desktop
+    
+    public var onToggleStage: (() -> Void)?
+    public var onCycleStyle: (() -> Void)?
+    public var onAdjustOffset: ((Double) -> Void)?
+    
+    private init() {
+        startHotkeyMonitors()
+        startIdleTimer()
+    }
+    
+    deinit {
+        stopHotkeyMonitors()
+        idleCheckTimer?.cancel()
+    }
+    
+    public func startHotkeyMonitors() {
+        // Global Key Monitor (when other applications have focus)
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleKeyEvent(event)
+        }
+        
+        // Local Key Monitor (when VerciLumn has focus)
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if self?.handleKeyEvent(event) == true {
+                return nil // consume event
+            }
+            return event
+        }
+    }
+    
+    public func stopHotkeyMonitors() {
+        if let gm = globalMonitor {
+            NSEvent.removeMonitor(gm)
+            globalMonitor = nil
+        }
+        if let lm = localMonitor {
+            NSEvent.removeMonitor(lm)
+            localMonitor = nil
+        }
+    }
+    
+    @discardableResult
+    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        
+        // 1. Command + Shift + L -> Toggle Full Stage Immersion
+        if flags == [.command, .shift] && event.charactersIgnoringModifiers?.lowercased() == "l" {
+            DispatchQueue.main.async { [weak self] in
+                self?.onToggleStage?()
+            }
+            return true
+        }
+        
+        // 2. Command + Option + RightArrow -> Cycle Lyric Themes
+        if flags == [.command, .option] && event.keyCode == 124 { // 124 is Right Arrow
+            DispatchQueue.main.async { [weak self] in
+                self?.onCycleStyle?()
+            }
+            return true
+        }
+        
+        // 3. Command + [ -> Sync Offset -50ms
+        if flags == .command && event.charactersIgnoringModifiers == "[" {
+            DispatchQueue.main.async { [weak self] in
+                self?.onAdjustOffset?(-0.05)
+            }
+            return true
+        }
+        
+        // 4. Command + ] -> Sync Offset +50ms
+        if flags == .command && event.charactersIgnoringModifiers == "]" {
+            DispatchQueue.main.async { [weak self] in
+                self?.onAdjustOffset?(+0.05)
+            }
+            return true
+        }
+        
+        return false
+    }
+    
+    private func startIdleTimer() {
+        idleCheckTimer = Timer.publish(every: 5.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.checkUserInactivity()
+            }
+    }
+    
+    private func checkUserInactivity() {
+        guard isIdleScreensaverEnabled else { return }
+        let isPlaying = PlaybackManager.shared.currentTrack.isPlaying
+        let anyEvent = CGEventType(rawValue: ~0) ?? .mouseMoved
+        let idleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyEvent)
+        
+        if isPlaying && idleTime >= idleThresholdSeconds && !isCurrentlyInAutoScreensaver {
+            // User has been idle for > 60s while music is playing -> Activate Full Stage Screensaver
+            previousDisplayMode = OverlayWindowManager.shared.currentMode
+            if previousDisplayMode != .fullStage {
+                isCurrentlyInAutoScreensaver = true
+                OverlayWindowManager.shared.setDisplayMode(.fullStage)
+            }
+        } else if isCurrentlyInAutoScreensaver && idleTime < 2.0 {
+            // User moved mouse or typed -> restore previous window placement
+            isCurrentlyInAutoScreensaver = false
+            OverlayWindowManager.shared.setDisplayMode(previousDisplayMode)
+        }
+    }
+}
