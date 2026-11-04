@@ -1,164 +1,130 @@
 import SwiftUI
 
-public struct ReactiveParticle: Identifiable {
-    public let id = UUID()
-    var x: CGFloat
-    var y: CGFloat
-    var vx: CGFloat
-    var vy: CGFloat
-    var baseRadius: CGFloat
-    var radius: CGFloat
-    var alpha: Double
-    var hueShift: Double
-    var pulseDecay: CGFloat
+final class ParticleSimulator {
+    struct Particle {
+        var x: CGFloat
+        var y: CGFloat
+        var vx: CGFloat
+        var vy: CGFloat
+        var baseRadius: CGFloat
+        var alpha: Double
+        var isSecondary: Bool
+    }
+    
+    var particles: [Particle] = []
+    private var lastTime: TimeInterval = 0
+    private var currentSize: CGSize = .zero
+    
+    func setup(in size: CGSize, count: Int = 50) {
+        guard size.width > 0, size.height > 0 else { return }
+        self.currentSize = size
+        particles = (0..<count).map { _ in
+            let r = CGFloat.random(in: 2.0...4.5)
+            return Particle(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height),
+                vx: CGFloat.random(in: -0.25...0.25),
+                vy: CGFloat.random(in: -0.25...0.25),
+                baseRadius: r,
+                alpha: Double.random(in: 0.3...0.85),
+                isSecondary: Bool.random()
+            )
+        }
+    }
+    
+    func step(time: TimeInterval, beat: CGFloat, in size: CGSize) {
+        guard !particles.isEmpty, size.width > 0, size.height > 0 else {
+            setup(in: size)
+            return
+        }
+        
+        let dt = lastTime > 0 ? min(CGFloat(time - lastTime), 0.05) : 0.016
+        lastTime = time
+        let speed = (1.0 + beat * 2.5) * dt * 60.0
+        
+        let cx = size.width / 2
+        let cy = size.height / 2
+        let kick = beat > 0.35 ? (beat * 18.0 * dt) : 0
+        
+        for i in 0..<particles.count {
+            particles[i].x += particles[i].vx * speed
+            particles[i].y += particles[i].vy * speed
+            
+            if kick > 0 {
+                let dx = particles[i].x - cx
+                let dy = particles[i].y - cy
+                let dist = max(sqrt(dx * dx + dy * dy), 1.0)
+                particles[i].x += (dx / dist) * kick
+                particles[i].y += (dy / dist) * kick
+            }
+            
+            if particles[i].x < -10 { particles[i].x = size.width + 10 }
+            if particles[i].x > size.width + 10 { particles[i].x = -10 }
+            if particles[i].y < -10 { particles[i].y = size.height + 10 }
+            if particles[i].y > size.height + 10 { particles[i].y = -10 }
+        }
+    }
 }
 
 public struct ParticleCosmosView: View {
     @ObservedObject var audio = AudioBeatEngine.shared
     @ObservedObject var palette = ColorPaletteManager.shared
     
-    @State private var particles: [ReactiveParticle] = []
-    @State private var initialized = false
-    
-    private let particleCount = 120
+    // Class instance does NOT trigger SwiftUI body re-evaluations
+    @State private var simulator = ParticleSimulator()
     
     public init() {}
     
     public var body: some View {
         GeometryReader { geometry in
-            TimelineView(.animation) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 45.0)) { timeline in
                 Canvas { context, size in
                     let beat = CGFloat(audio.beatIntensity)
+                    let time = timeline.date.timeIntervalSinceReferenceDate
+                    simulator.step(time: time, beat: beat, in: size)
+                    
                     let center = CGPoint(x: size.width / 2, y: size.height / 2)
                     
-                    // 1. Center Ambient Radial Pulse
-                    let ambientRadius = 250 + (beat * 180)
+                    // 1. Soft Radial Ambient Center Pulse (Single hardware accelerated draw)
+                    let ambientRadius = min(size.width, size.height) * (0.35 + (beat * 0.15))
                     let ambientRect = CGRect(
-                        x: center.x - ambientRadius / 2,
-                        y: center.y - ambientRadius / 2,
-                        width: ambientRadius,
-                        height: ambientRadius
+                        x: center.x - ambientRadius,
+                        y: center.y - ambientRadius,
+                        width: ambientRadius * 2,
+                        height: ambientRadius * 2
                     )
                     context.fill(
                         Circle().path(in: ambientRect),
                         with: .radialGradient(
                             Gradient(colors: [
-                                palette.currentPalette.highlightAccent.opacity(0.18 + Double(beat) * 0.22),
-                                palette.currentPalette.secondaryGlow.opacity(0.08 + Double(beat) * 0.1),
+                                palette.currentPalette.highlightAccent.opacity(0.12 + Double(beat) * 0.12),
+                                palette.currentPalette.secondaryGlow.opacity(0.05),
                                 Color.clear
                             ]),
                             center: center,
                             startRadius: 10,
-                            endRadius: ambientRadius / 2
+                            endRadius: ambientRadius
                         )
                     )
                     
-                    // 2. Audio-Reactive Shockwave Ring on heavy beats
-                    if beat > 0.4 {
-                        let ringRadius = (beat * 400) + 100
-                        let ringRect = CGRect(
-                            x: center.x - ringRadius,
-                            y: center.y - ringRadius,
-                            width: ringRadius * 2,
-                            height: ringRadius * 2
-                        )
-                        context.stroke(
-                            Circle().path(in: ringRect),
-                            with: .color(palette.currentPalette.highlightAccent.opacity(Double(1.0 - beat) * 0.4)),
-                            lineWidth: 2 + (beat * 3)
-                        )
-                    }
+                    // 2. Optimized Particle Drawing
+                    let primaryColor = palette.currentPalette.highlightAccent
+                    let secondaryColor = palette.currentPalette.secondaryGlow
                     
-                    // 3. Render Particles
-                    for particle in particles {
-                        let currentRadius = particle.baseRadius + (beat * 5.0)
-                        let rect = CGRect(
-                            x: particle.x - currentRadius,
-                            y: particle.y - currentRadius,
-                            width: currentRadius * 2,
-                            height: currentRadius * 2
-                        )
+                    for p in simulator.particles {
+                        let r = p.baseRadius + (beat * 3.0)
+                        let rect = CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)
+                        let col = (p.isSecondary ? secondaryColor : primaryColor)
+                            .opacity(p.alpha * (0.7 + Double(beat) * 0.3))
                         
-                        let particleColor = (particle.hueShift > 0.5 ? palette.currentPalette.highlightAccent : palette.currentPalette.secondaryGlow)
-                            .opacity(particle.alpha * (0.6 + Double(beat) * 0.4))
-                        
-                        // Particle Bloom
-                        context.fill(
-                            Circle().path(in: rect.insetBy(dx: -currentRadius * 0.8, dy: -currentRadius * 0.8)),
-                            with: .color(particleColor.opacity(0.25))
-                        )
-                        // Particle Core
-                        context.fill(
-                            Circle().path(in: rect),
-                            with: .color(particleColor)
-                        )
+                        context.fill(Circle().path(in: rect), with: .color(col))
                     }
-                }
-                .onChange(of: timeline.date) { _, _ in
-                    updateParticles(in: geometry.size)
                 }
             }
             .onAppear {
-                initParticles(in: geometry.size)
+                simulator.setup(in: geometry.size)
             }
         }
-        .background(Color(red: 0.04, green: 0.04, blue: 0.06))
-    }
-    
-    private func initParticles(in size: CGSize) {
-        guard !initialized, size.width > 0, size.height > 0 else { return }
-        initialized = true
-        particles = (0..<particleCount).map { _ in
-            makeParticle(in: size)
-        }
-    }
-    
-    private func makeParticle(in size: CGSize) -> ReactiveParticle {
-        let baseR = CGFloat.random(in: 1.5...4.5)
-        return ReactiveParticle(
-            x: CGFloat.random(in: 0...size.width),
-            y: CGFloat.random(in: 0...size.height),
-            vx: CGFloat.random(in: -0.4...0.4),
-            vy: CGFloat.random(in: -0.4...0.4),
-            baseRadius: baseR,
-            radius: baseR,
-            alpha: Double.random(in: 0.35...0.9),
-            hueShift: Double.random(in: 0...1),
-            pulseDecay: CGFloat.random(in: 0.92...0.98)
-        )
-    }
-    
-    private func updateParticles(in size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
-        if particles.isEmpty {
-            initParticles(in: size)
-            return
-        }
-        
-        let beat = CGFloat(audio.beatIntensity)
-        let speedMultiplier = 1.0 + (beat * 3.5)
-        let center = CGPoint(x: size.width / 2, y: size.height / 2)
-        
-        for i in 0..<particles.count {
-            // Apply drift
-            particles[i].x += particles[i].vx * speedMultiplier
-            particles[i].y += particles[i].vy * speedMultiplier
-            
-            // On beat kick, apply subtle radial explosion away from center
-            if beat > 0.3 {
-                let dx = particles[i].x - center.x
-                let dy = particles[i].y - center.y
-                let dist = max(sqrt(dx * dx + dy * dy), 1.0)
-                let push = (beat * 1.8) / dist * 30.0
-                particles[i].x += (dx / dist) * push
-                particles[i].y += (dy / dist) * push
-            }
-            
-            // Screen Wrapping
-            if particles[i].x < -10 { particles[i].x = size.width + 10 }
-            if particles[i].x > size.width + 10 { particles[i].x = -10 }
-            if particles[i].y < -10 { particles[i].y = size.height + 10 }
-            if particles[i].y > size.height + 10 { particles[i].y = -10 }
-        }
+        .background(Color(red: 0.03, green: 0.03, blue: 0.05))
     }
 }

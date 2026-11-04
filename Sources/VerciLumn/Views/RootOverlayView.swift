@@ -20,19 +20,22 @@ public struct RootOverlayView: View {
     @Binding var glowSensitivity: Double
     @Binding var backdropMode: BackdropMode
     @Binding var timingOffset: Double
+    @Binding var textScale: Double
     
     public init(
         currentStyle: Binding<LyricStyle>,
         isBezelEnabled: Binding<Bool>,
         glowSensitivity: Binding<Double>,
         backdropMode: Binding<BackdropMode>,
-        timingOffset: Binding<Double>
+        timingOffset: Binding<Double>,
+        textScale: Binding<Double>
     ) {
         self._currentStyle = currentStyle
         self._isBezelEnabled = isBezelEnabled
         self._glowSensitivity = glowSensitivity
         self._backdropMode = backdropMode
         self._timingOffset = timingOffset
+        self._textScale = textScale
     }
     
     public var body: some View {
@@ -47,13 +50,13 @@ public struct RootOverlayView: View {
                 glowIntensityMultiplier: CGFloat(glowSensitivity)
             )
             
-            // 3. Centered Synced Word Lyrics (No Collisions)
+            // 3. Centered Synced Word Lyrics (Full Screen Scaled, No Collisions)
             VStack {
                 Spacer()
-                VerciLyricsView(style: currentStyle, timingOffset: timingOffset)
+                VerciLyricsView(style: currentStyle, timingOffset: timingOffset, textScale: textScale)
                 Spacer()
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 20)
             
             // 4. Now Playing Frosted Acrylic Glass Card (Bottom Left)
             VStack {

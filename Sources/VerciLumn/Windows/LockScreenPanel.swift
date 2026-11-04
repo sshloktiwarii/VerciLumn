@@ -2,15 +2,16 @@ import AppKit
 import SwiftUI
 
 public enum WindowDisplayMode: String, CaseIterable, Identifiable {
-    case desktop = "Desktop (Behind Apps)"
-    case alwaysOnTop = "Floating (Above All Apps)"
-    case lockScreenOnly = "Lock Screen Only"
+    case fullStage = "Full Stage Immersion (Entire Screen)"
+    case lockScreenAndStage = "Lock Screen & Full Stage"
+    case desktop = "Desktop (Behind All Apps)"
+    case floating = "Floating Top Overlay"
     
     public var id: String { rawValue }
 }
 
 public final class LockScreenPanel: NSPanel {
-    public private(set) var displayMode: WindowDisplayMode = .desktop
+    public private(set) var displayMode: WindowDisplayMode = .fullStage
     public private(set) var isScreenLocked: Bool = false
     
     public init(contentView: NSView, screen: NSScreen = NSScreen.main ?? NSScreen.screens[0]) {
@@ -27,6 +28,7 @@ public final class LockScreenPanel: NSPanel {
         self.hasShadow = false
         self.ignoresMouseEvents = true
         self.isReleasedWhenClosed = false
+        self.canHide = false
         self.contentView = contentView
         
         setupLockNotifications()
@@ -67,22 +69,31 @@ public final class LockScreenPanel: NSPanel {
     public func updateWindowLevel() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            
+            // Screen Saver / Lock Screen elevation priority (macOS Sonoma/Sequoia compatible)
+            let lockScreenLevel = NSWindow.Level(Int(CGWindowLevelForKey(.screenSaverWindow)) + 2)
+            
             if self.isScreenLocked {
-                // Elevate over lock screen
-                self.level = NSWindow.Level(Int(CGWindowLevelForKey(.screenSaverWindow)))
+                self.level = lockScreenLevel
                 self.orderFrontRegardless()
-            } else {
-                switch self.displayMode {
-                case .desktop:
-                    // Sits behind all applications on the desktop
-                    self.level = NSWindow.Level(Int(CGWindowLevelForKey(.desktopWindow)))
-                    self.orderBack(nil)
-                case .alwaysOnTop:
-                    self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)))
-                    self.orderFrontRegardless()
-                case .lockScreenOnly:
-                    self.orderOut(nil)
-                }
+                return
+            }
+            
+            switch self.displayMode {
+            case .fullStage:
+                // Covers the full monitor above wallpaper, interactive stage
+                self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) - 1)
+                self.orderFrontRegardless()
+            case .lockScreenAndStage:
+                self.level = lockScreenLevel
+                self.orderFrontRegardless()
+            case .desktop:
+                // Sits behind all applications on the desktop
+                self.level = NSWindow.Level(Int(CGWindowLevelForKey(.desktopWindow)))
+                self.orderBack(nil)
+            case .floating:
+                self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
+                self.orderFrontRegardless()
             }
         }
     }

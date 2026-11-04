@@ -76,20 +76,27 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
             guard let self = self else { return }
             self.isCapturing = true
             var phase: Float = 0.0
-            self.simulatedTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common)
+            self.simulatedTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common)
                 .autoconnect()
                 .sink { [weak self] _ in
-                    phase += 0.08
+                    phase += 0.06
                     let raw = (sin(phase) + sin(phase * 2.3) + 2.0) / 4.0
-                    let pulse = max(0.0, (raw - 0.45) * 1.8)
+                    let pulse = max(0.0, (raw - 0.45) * 1.5)
                     self?.beatIntensity = pulse
                     self?.onBeatPulse?(pulse)
                 }
         }
     }
     
+    private var lastPublishTime: TimeInterval = 0
+    private let throttleInterval: TimeInterval = 1.0 / 45.0 // 45 FPS max update rate to eliminate CPU burn
+
     public func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+        
+        let now = CACurrentMediaTime()
+        guard now - lastPublishTime >= throttleInterval else { return }
+        lastPublishTime = now
         
         var length = 0
         var dataPtr: UnsafeMutablePointer<Int8>?
@@ -114,9 +121,10 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
         vDSP_rmsqv(samples, 1, &rms, vDSP_Length(samples.count))
         
         // Scale, clamp and apply non-linear bass thresholding
-        let pulse = min(max((rms - 0.03) * 6.0, 0.0), 1.0)
+        let pulse = min(max((rms - 0.03) * 5.0, 0.0), 1.0)
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.beatIntensity = pulse
             self.onBeatPulse?(pulse)
         }

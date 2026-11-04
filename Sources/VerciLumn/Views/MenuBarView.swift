@@ -11,6 +11,7 @@ public struct MenuBarView: View {
     @Binding var displayMode: WindowDisplayMode
     @Binding var backdropMode: BackdropMode
     @Binding var timingOffset: Double
+    @Binding var textScale: Double
     
     public init(
         currentStyle: Binding<LyricStyle>,
@@ -18,7 +19,8 @@ public struct MenuBarView: View {
         glowSensitivity: Binding<Double>,
         displayMode: Binding<WindowDisplayMode>,
         backdropMode: Binding<BackdropMode>,
-        timingOffset: Binding<Double>
+        timingOffset: Binding<Double>,
+        textScale: Binding<Double>
     ) {
         self._currentStyle = currentStyle
         self._isBezelEnabled = isBezelEnabled
@@ -26,6 +28,7 @@ public struct MenuBarView: View {
         self._displayMode = displayMode
         self._backdropMode = backdropMode
         self._timingOffset = timingOffset
+        self._textScale = textScale
     }
     
     public var body: some View {
@@ -85,7 +88,7 @@ public struct MenuBarView: View {
             
             // 3. Lyric Visual Style
             VStack(alignment: .leading, spacing: 6) {
-                Text("LYRIC VISUAL STYLE")
+                Text("ANIMATION THEME")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.secondary)
                 
@@ -100,7 +103,28 @@ public struct MenuBarView: View {
             
             Divider()
             
-            // 4. Vocal Sync Calibration Slider
+            // 4. Text Size Scale Slider
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("TEXT SIZE SCALE")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(String(format: "%.1fx", textScale))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                }
+                
+                HStack(spacing: 8) {
+                    Slider(value: $textScale, in: 0.7...2.2, step: 0.1)
+                    Button("1x") {
+                        textScale = 1.0
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            
+            // 5. Vocal Sync Calibration Slider
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("VOCAL SYNC OFFSET")
@@ -121,7 +145,9 @@ public struct MenuBarView: View {
                 }
             }
             
-            // 5. Bezel Glow Controls
+            Divider()
+            
+            // 6. Bezel Glow Controls
             VStack(alignment: .leading, spacing: 6) {
                 Toggle("Beat-Reactive Bezel Glow", isOn: $isBezelEnabled)
                     .font(.system(size: 13, weight: .medium))
@@ -141,12 +167,12 @@ public struct MenuBarView: View {
             
             Divider()
             
-            // 6. Diagnostics & Quit
+            // 7. Diagnostics & Quit
             HStack {
                 Circle()
                     .fill(audio.isCapturing ? Color.green : Color.orange)
                     .frame(width: 8, height: 8)
-                Text(audio.isCapturing ? "Audio Engine Active" : "Audio Engine Idle")
+                Text(audio.isCapturing ? "Engine: Ultra-Efficient" : "Engine Idle")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 

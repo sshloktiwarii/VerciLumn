@@ -49,16 +49,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             get: { UserDefaults.standard.double(forKey: "vercilumn_timing_offset") },
             set: { UserDefaults.standard.set($0, forKey: "vercilumn_timing_offset") }
         )
+        let scaleBinding = Binding(
+            get: {
+                let s = UserDefaults.standard.double(forKey: "vercilumn_text_scale")
+                return s > 0 ? s : 1.0
+            },
+            set: { UserDefaults.standard.set($0, forKey: "vercilumn_text_scale") }
+        )
         
         let root = RootOverlayView(
             currentStyle: styleBinding,
             isBezelEnabled: bezelBinding,
             glowSensitivity: sensitivityBinding,
             backdropMode: backdropBinding,
-            timingOffset: offsetBinding
+            timingOffset: offsetBinding,
+            textScale: scaleBinding
         )
         
-        let initialMode = WindowDisplayMode(rawValue: UserDefaults.standard.string(forKey: "vercilumn_display_mode") ?? "") ?? .desktop
+        let initialMode = WindowDisplayMode(rawValue: UserDefaults.standard.string(forKey: "vercilumn_display_mode") ?? "") ?? .fullStage
         OverlayWindowManager.shared.setupOverlays(rootView: root, mode: initialMode)
     }
 }
@@ -70,9 +78,10 @@ struct VerciLumnApp: App {
     @AppStorage("vercilumn_lyric_style") private var storedStyle: String = LyricStyle.verciReel.rawValue
     @AppStorage("vercilumn_bezel_enabled") private var isBezelEnabled: Bool = true
     @AppStorage("vercilumn_glow_sensitivity") private var glowSensitivity: Double = 1.0
-    @AppStorage("vercilumn_display_mode") private var storedDisplayMode: String = WindowDisplayMode.desktop.rawValue
+    @AppStorage("vercilumn_display_mode") private var storedDisplayMode: String = WindowDisplayMode.fullStage.rawValue
     @AppStorage("vercilumn_backdrop_mode") private var storedBackdropMode: String = BackdropMode.particleCosmos.rawValue
     @AppStorage("vercilumn_timing_offset") private var timingOffset: Double = 0.0
+    @AppStorage("vercilumn_text_scale") private var textScale: Double = 1.0
     
     private var currentStyleBinding: Binding<LyricStyle> {
         Binding(
@@ -83,14 +92,14 @@ struct VerciLumnApp: App {
     
     private var displayModeBinding: Binding<WindowDisplayMode> {
         Binding(
-            get: { WindowDisplayMode(rawValue: storedDisplayMode) ?? .desktop },
+            get: { WindowDisplayMode(rawValue: storedDisplayMode) ?? .fullStage },
             set: { storedDisplayMode = $0.rawValue }
         )
     }
     
     private var backdropModeBinding: Binding<BackdropMode> {
         Binding(
-            get: { BackdropMode(rawValue: storedBackdropMode) ?? .oledBlack },
+            get: { BackdropMode(rawValue: storedBackdropMode) ?? .particleCosmos },
             set: { storedBackdropMode = $0.rawValue }
         )
     }
@@ -103,7 +112,8 @@ struct VerciLumnApp: App {
                 glowSensitivity: $glowSensitivity,
                 displayMode: displayModeBinding,
                 backdropMode: backdropModeBinding,
-                timingOffset: $timingOffset
+                timingOffset: $timingOffset,
+                textScale: $textScale
             )
         }
         .menuBarExtraStyle(.window)
