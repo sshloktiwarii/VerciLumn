@@ -195,7 +195,8 @@ public final class PlaybackManager: ObservableObject {
         """
         if let artAppleScript = NSAppleScript(source: artScript) {
             let artDescriptor = artAppleScript.executeAndReturnError(nil)
-            if let data = artDescriptor.data {
+            let data = artDescriptor.data
+            if !data.isEmpty {
                 artworkImage = NSImage(data: data)
             }
         }

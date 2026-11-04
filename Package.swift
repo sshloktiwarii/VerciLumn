@@ -16,8 +16,7 @@ let package = Package(
             dependencies: [],
             path: "Sources/VerciLumn",
             resources: [
-                .process("Resources"),
-                .process("Shaders")
+                .copy("Shaders/FisheyeShader.metal")
             ]
         )
     ]

@@ -17,17 +17,27 @@ public final class MetalShaderRenderer {
     
     private func setupPipeline() {
         guard let device = device else { return }
-        do {
-            let library = try device.makeDefaultLibrary(bundle: Bundle.module)
-            if let kernelFunction = library.makeFunction(name: "fisheyeDistortion") {
-                self.computePipelineState = try device.makeComputePipelineState(function: kernelFunction)
-            }
-        } catch {
-            // Fallback to system default library if bundle-specific load fails
-            if let library = device.makeDefaultLibrary(),
-               let kernelFunction = library.makeFunction(name: "fisheyeDistortion") {
-                self.computePipelineState = try? device.makeComputePipelineState(function: kernelFunction)
-            }
+        
+        // 1. Try compiled metallib in bundle
+        if let library = try? device.makeDefaultLibrary(bundle: Bundle.module),
+           let kernelFunction = library.makeFunction(name: "fisheyeDistortion") {
+            self.computePipelineState = try? device.makeComputePipelineState(function: kernelFunction)
+            return
+        }
+        
+        // 2. Try compiling shader source at runtime (GPU driver JIT)
+        if let shaderURL = Bundle.module.url(forResource: "FisheyeShader", withExtension: "metal"),
+           let shaderSource = try? String(contentsOf: shaderURL, encoding: .utf8),
+           let library = try? device.makeLibrary(source: shaderSource, options: nil),
+           let kernelFunction = library.makeFunction(name: "fisheyeDistortion") {
+            self.computePipelineState = try? device.makeComputePipelineState(function: kernelFunction)
+            return
+        }
+        
+        // 3. Fallback to system default library
+        if let library = device.makeDefaultLibrary(),
+           let kernelFunction = library.makeFunction(name: "fisheyeDistortion") {
+            self.computePipelineState = try? device.makeComputePipelineState(function: kernelFunction)
         }
     }
     

@@ -1,9 +1,9 @@
 import Foundation
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit
 import Accelerate
 import Combine
 
-public final class AudioBeatEngine: NSObject, ObservableObject, SCStreamOutput, SCStreamDelegate {
+public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Sendable, SCStreamOutput, SCStreamDelegate {
     public static let shared = AudioBeatEngine()
     
     @Published public private(set) var beatIntensity: Float = 0.0
@@ -72,7 +72,8 @@ public final class AudioBeatEngine: NSObject, ObservableObject, SCStreamOutput, 
     }
     
     private func startSimulatedFallback() {
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.isCapturing = true
             var phase: Float = 0.0
             self.simulatedTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common)
