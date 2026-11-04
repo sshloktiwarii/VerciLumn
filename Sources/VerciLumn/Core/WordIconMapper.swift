@@ -165,3 +165,4 @@ public struct WordIconMapper {
         return wordToIconMap[clean]
     }
 }
+

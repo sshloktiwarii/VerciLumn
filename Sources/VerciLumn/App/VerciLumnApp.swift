@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start non-invasive audio capture
         AudioBeatEngine.shared.startCapture()
         
-        // Setup lockscreen overlays on startup
+        // Setup lockscreen/desktop overlays on startup
         setupOverlays()
         
         // Listen for screen layout changes (plugging/unplugging monitors)
@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func setupOverlays() {
         let styleBinding = Binding(
-            get: { LyricStyle(rawValue: UserDefaults.standard.string(forKey: "vercilumn_lyric_style") ?? "") ?? .standard },
+            get: { LyricStyle(rawValue: UserDefaults.standard.string(forKey: "vercilumn_lyric_style") ?? "") ?? .verciReel },
             set: { UserDefaults.standard.set($0.rawValue, forKey: "vercilumn_lyric_style") }
         )
         let bezelBinding = Binding(
@@ -41,13 +41,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             set: { UserDefaults.standard.set($0, forKey: "vercilumn_glow_sensitivity") }
         )
+        let backdropBinding = Binding(
+            get: { BackdropMode(rawValue: UserDefaults.standard.string(forKey: "vercilumn_backdrop_mode") ?? "") ?? .oledBlack },
+            set: { UserDefaults.standard.set($0.rawValue, forKey: "vercilumn_backdrop_mode") }
+        )
+        let offsetBinding = Binding(
+            get: { UserDefaults.standard.double(forKey: "vercilumn_timing_offset") },
+            set: { UserDefaults.standard.set($0, forKey: "vercilumn_timing_offset") }
+        )
         
         let root = RootOverlayView(
             currentStyle: styleBinding,
             isBezelEnabled: bezelBinding,
-            glowSensitivity: sensitivityBinding
+            glowSensitivity: sensitivityBinding,
+            backdropMode: backdropBinding,
+            timingOffset: offsetBinding
         )
-        OverlayWindowManager.shared.setupOverlays(rootView: root)
+        
+        let initialMode = WindowDisplayMode(rawValue: UserDefaults.standard.string(forKey: "vercilumn_display_mode") ?? "") ?? .desktop
+        OverlayWindowManager.shared.setupOverlays(rootView: root, mode: initialMode)
     }
 }
 
@@ -55,14 +67,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct VerciLumnApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
-    @AppStorage("vercilumn_lyric_style") private var storedStyle: String = LyricStyle.standard.rawValue
+    @AppStorage("vercilumn_lyric_style") private var storedStyle: String = LyricStyle.verciReel.rawValue
     @AppStorage("vercilumn_bezel_enabled") private var isBezelEnabled: Bool = true
     @AppStorage("vercilumn_glow_sensitivity") private var glowSensitivity: Double = 1.0
+    @AppStorage("vercilumn_display_mode") private var storedDisplayMode: String = WindowDisplayMode.desktop.rawValue
+    @AppStorage("vercilumn_backdrop_mode") private var storedBackdropMode: String = BackdropMode.oledBlack.rawValue
+    @AppStorage("vercilumn_timing_offset") private var timingOffset: Double = 0.0
     
     private var currentStyleBinding: Binding<LyricStyle> {
         Binding(
-            get: { LyricStyle(rawValue: storedStyle) ?? .standard },
+            get: { LyricStyle(rawValue: storedStyle) ?? .verciReel },
             set: { storedStyle = $0.rawValue }
+        )
+    }
+    
+    private var displayModeBinding: Binding<WindowDisplayMode> {
+        Binding(
+            get: { WindowDisplayMode(rawValue: storedDisplayMode) ?? .desktop },
+            set: { storedDisplayMode = $0.rawValue }
+        )
+    }
+    
+    private var backdropModeBinding: Binding<BackdropMode> {
+        Binding(
+            get: { BackdropMode(rawValue: storedBackdropMode) ?? .oledBlack },
+            set: { storedBackdropMode = $0.rawValue }
         )
     }
     
@@ -71,7 +100,10 @@ struct VerciLumnApp: App {
             MenuBarView(
                 currentStyle: currentStyleBinding,
                 isBezelEnabled: $isBezelEnabled,
-                glowSensitivity: $glowSensitivity
+                glowSensitivity: $glowSensitivity,
+                displayMode: displayModeBinding,
+                backdropMode: backdropModeBinding,
+                timingOffset: $timingOffset
             )
         }
         .menuBarExtraStyle(.window)

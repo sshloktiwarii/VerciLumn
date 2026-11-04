@@ -115,3 +115,4 @@ Clicking the VerciLumn icon in the macOS menu bar opens the control menu:
 - **Beat Sensitivity**: Adjust audio reaction multiplier ($0.5\times$ to $2.5\times$).
 - **Engine Status**: Shows live status of playback poller and audio capture engine.
 - **Quit**: Gracefully closes lock screen overlay panels and releases all assertions.
+

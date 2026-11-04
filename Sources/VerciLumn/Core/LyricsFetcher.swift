@@ -200,3 +200,4 @@ public final class LyricsFetcher: ObservableObject {
         return LyricsData(trackTitle: track, artistName: artist, lines: parsedLines, isWordSynced: detectedWordSync)
     }
 }
+

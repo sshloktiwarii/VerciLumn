@@ -32,10 +32,15 @@ public struct TrackState: Equatable {
         self.artwork = artwork
     }
     
-    public var exactPosition: TimeInterval {
-        guard isPlaying else { return position }
+    public func exactPosition(withOffset offset: TimeInterval = 0) -> TimeInterval {
+        guard isPlaying else { return max(0, position + offset) }
         let elapsed = CACurrentMediaTime() - sampledAt
-        return min(position + elapsed, duration)
+        let raw = position + elapsed + offset
+        return duration > 0 ? min(max(0, raw), duration) : max(0, raw)
+    }
+    
+    public var exactPosition: TimeInterval {
+        return exactPosition(withOffset: 0)
     }
 }
 

@@ -40,3 +40,4 @@ kernel void fisheyeDistortion(texture2d<float, access::read> inTexture [[texture
     }
     return position;
 }
+
