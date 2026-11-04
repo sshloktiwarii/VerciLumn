@@ -53,7 +53,7 @@ public final class LockScreenPanel: NSPanel {
     public private(set) var displayMode: WindowDisplayMode = .fullStage
     public private(set) var isScreenLocked: Bool = false
     
-    public init(contentView: NSView, screen: NSScreen = NSScreen.main ?? NSScreen.screens[0]) {
+    public init(contentView: NSView, screen: NSScreen = NSScreen.main ?? NSScreen.screens.first ?? NSScreen()) {
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],

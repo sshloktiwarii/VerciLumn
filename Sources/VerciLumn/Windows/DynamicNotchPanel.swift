@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 public final class DynamicNotchPanel: NSPanel {
-    public init(screen: NSScreen = NSScreen.main ?? NSScreen.screens[0]) {
+    public init(screen: NSScreen = NSScreen.main ?? NSScreen.screens.first ?? NSScreen()) {
         let panelWidth: CGFloat = 460
         let panelHeight: CGFloat = 90
         
@@ -40,7 +40,7 @@ public final class DynamicNotchPanel: NSPanel {
         return false
     }
     
-    public func updatePosition(for screen: NSScreen = NSScreen.main ?? NSScreen.screens[0]) {
+    public func updatePosition(for screen: NSScreen = NSScreen.main ?? NSScreen.screens.first ?? NSScreen()) {
         let panelWidth: CGFloat = 460
         let panelHeight: CGFloat = 90
         let screenFrame = screen.frame

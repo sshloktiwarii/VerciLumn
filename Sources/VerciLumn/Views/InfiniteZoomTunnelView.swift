@@ -5,6 +5,10 @@ final class ContinuousTunnelPhase {
     var lastTimestamp: Double = 0.0
     
     func advance(time: Double, beat: Double, energy: Double) -> (phase: Double, rotation: Double) {
+        guard !time.isNaN && !time.isInfinite else { return (accumulatedPhase, accumulatedPhase * 0.05) }
+        let safeBeat = (!beat.isNaN && !beat.isInfinite) ? max(0.0, beat) : 0.0
+        let safeEnergy = (!energy.isNaN && !energy.isInfinite) ? max(0.0, energy) : 0.0
+        
         if lastTimestamp == 0.0 {
             lastTimestamp = time
         }
@@ -13,8 +17,13 @@ final class ContinuousTunnelPhase {
         
         // Dynamic BPM-reactive forward rush:
         // Base cruise speed 1.35 + accelerates up to 3.8 on kicks, bass drops & high audio energy
-        let speed = 1.35 + (beat * 2.0) + (energy * 0.9)
+        let speed = 1.35 + (safeBeat * 2.0) + (safeEnergy * 0.9)
         accumulatedPhase += dt * speed
+        
+        // Bounded float protection for multi-day uninterrupted playback
+        if accumulatedPhase > 100_000.0 {
+            accumulatedPhase = accumulatedPhase.truncatingRemainder(dividingBy: 10_000.0)
+        }
         
         let rotation = accumulatedPhase * 0.05
         return (accumulatedPhase, rotation)

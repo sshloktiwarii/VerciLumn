@@ -130,8 +130,10 @@ public struct InteractivePlaybackScrubberView: View {
     }
     
     private func formatTime(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
+        guard !seconds.isNaN && !seconds.isInfinite && seconds >= 0 else { return "00:00" }
+        let clamped = min(seconds, 359999) // Limit to < 100 hours
+        let mins = Int(clamped) / 60
+        let secs = Int(clamped) % 60
         return String(format: "%02d:%02d", mins, secs)
     }
 }

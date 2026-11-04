@@ -60,9 +60,14 @@ public final class PlaybackManager: ObservableObject {
     private var timer: AnyCancellable?
     private let pollQueue = DispatchQueue(label: "com.vercilumn.playback.poller", qos: .userInitiated)
     
-    // Artwork Cache
-    private let artworkCache = NSCache<NSString, NSImage>()
+    // Artwork Cache with strict memory bounds
+    private let artworkCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 64
+        return cache
+    }()
     private var fetchingUrls = Set<String>()
+    private let urlLock = NSLock()
     
     // Pre-compiled AppleScripts
     private let spotifyPollScript: NSAppleScript? = {
@@ -222,31 +227,44 @@ public final class PlaybackManager: ObservableObject {
         let cacheKey = NSString(string: "\(title)-\(artist)-\(album)")
         let artworkImage = artworkCache.object(forKey: cacheKey)
         
-        // Asynchronous non-blocking artwork fetch
-        if artworkImage == nil && !artUrlStr.isEmpty && !fetchingUrls.contains(artUrlStr) {
-            if let url = URL(string: artUrlStr) {
+        // Asynchronous non-blocking artwork fetch with thread-safe tracking
+        var shouldFetch = false
+        if artworkImage == nil && !artUrlStr.isEmpty {
+            urlLock.lock()
+            if !fetchingUrls.contains(artUrlStr) {
                 fetchingUrls.insert(artUrlStr)
-                URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-                    guard let self = self, let data = data, let image = NSImage(data: data) else { return }
-                    self.artworkCache.setObject(image, forKey: cacheKey)
-                    DispatchQueue.main.async {
-                        if self.currentTrack.title == title {
-                            self.currentTrack = TrackState(
-                                title: self.currentTrack.title,
-                                artist: self.currentTrack.artist,
-                                album: self.currentTrack.album,
-                                position: self.currentTrack.position,
-                                duration: self.currentTrack.duration,
-                                isPlaying: self.currentTrack.isPlaying,
-                                sampledAt: self.currentTrack.sampledAt,
-                                artwork: image,
-                                playerSource: "Spotify"
-                            )
-                            _ = ColorPaletteManager.shared.extractPalette(from: image)
-                        }
-                    }
-                }.resume()
+                shouldFetch = true
             }
+            urlLock.unlock()
+        }
+        
+        if shouldFetch, let url = URL(string: artUrlStr) {
+            URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+                guard let self = self else { return }
+                defer {
+                    self.urlLock.lock()
+                    self.fetchingUrls.remove(artUrlStr)
+                    self.urlLock.unlock()
+                }
+                guard let data = data, let image = NSImage(data: data) else { return }
+                self.artworkCache.setObject(image, forKey: cacheKey)
+                DispatchQueue.main.async {
+                    if self.currentTrack.title == title {
+                        self.currentTrack = TrackState(
+                            title: self.currentTrack.title,
+                            artist: self.currentTrack.artist,
+                            album: self.currentTrack.album,
+                            position: self.currentTrack.position,
+                            duration: self.currentTrack.duration,
+                            isPlaying: self.currentTrack.isPlaying,
+                            sampledAt: self.currentTrack.sampledAt,
+                            artwork: image,
+                            playerSource: "Spotify"
+                        )
+                        _ = ColorPaletteManager.shared.extractPalette(from: image)
+                    }
+                }
+            }.resume()
         }
         
         return TrackState(
@@ -308,6 +326,7 @@ public final class PlaybackManager: ObservableObject {
     // MARK: - Interactive Seeking (Feature 1)
     
     public func seekTo(seconds: TimeInterval) {
+        guard !seconds.isNaN && !seconds.isInfinite else { return }
         let target = max(0, seconds)
         let source = currentTrack.playerSource
         
@@ -348,12 +367,17 @@ public final class PlaybackManager: ObservableObject {
     }
     
     public func rewind(seconds: TimeInterval = 5.0) {
-        let target = max(0, currentTrack.exactPosition - seconds)
+        let current = currentTrack.exactPosition
+        guard !current.isNaN && !current.isInfinite else { return }
+        let target = max(0, current - seconds)
         seekTo(seconds: target)
     }
     
     public func fastForward(seconds: TimeInterval = 5.0) {
-        let target = min(currentTrack.duration, currentTrack.exactPosition + seconds)
+        let current = currentTrack.exactPosition
+        let duration = currentTrack.duration
+        guard !current.isNaN && !current.isInfinite && !duration.isNaN && !duration.isInfinite else { return }
+        let target = min(duration, current + seconds)
         seekTo(seconds: target)
     }
     
@@ -363,10 +387,18 @@ public final class PlaybackManager: ObservableObject {
         let source = currentTrack.playerSource
         pollQueue.async { [weak self] in
             if source == "Spotify" {
-                let script = "tell application \"Spotify\" to playpause"
+                let script = """
+                if application "Spotify" is running then
+                    tell application "Spotify" to playpause
+                end if
+                """
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             } else {
-                let script = "tell application \"Music\" to playpause"
+                let script = """
+                if application "Music" is running then
+                    tell application "Music" to playpause
+                end if
+                """
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             }
             self?.pollActivePlayer()
@@ -377,10 +409,18 @@ public final class PlaybackManager: ObservableObject {
         let source = currentTrack.playerSource
         pollQueue.async { [weak self] in
             if source == "Spotify" {
-                let script = "tell application \"Spotify\" to next track"
+                let script = """
+                if application "Spotify" is running then
+                    tell application "Spotify" to next track
+                end if
+                """
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             } else {
-                let script = "tell application \"Music\" to next track"
+                let script = """
+                if application "Music" is running then
+                    tell application "Music" to next track
+                end if
+                """
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             }
             self?.pollActivePlayer()
@@ -391,10 +431,18 @@ public final class PlaybackManager: ObservableObject {
         let source = currentTrack.playerSource
         pollQueue.async { [weak self] in
             if source == "Spotify" {
-                let script = "tell application \"Spotify\" to previous track"
+                let script = """
+                if application "Spotify" is running then
+                    tell application "Spotify" to previous track
+                end if
+                """
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             } else {
-                let script = "tell application \"Music\" to previous track"
+                let script = """
+                if application "Music" is running then
+                    tell application "Music" to previous track
+                end if
+                """
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             }
             self?.pollActivePlayer()

@@ -101,16 +101,36 @@ public final class LyricsFetcher: ObservableObject {
     private let taskQueue = DispatchQueue(label: "com.vercilumn.lyrics.tasks")
     private let session: URLSession
     
-    // In-memory offline cache
-    private let lyricsCache = NSCache<NSString, LyricsDataBox>()
+    // In-memory offline cache with strict bounds to prevent unbounded heap growth
+    private let lyricsCache: NSCache<NSString, LyricsDataBox> = {
+        let cache = NSCache<NSString, LyricsDataBox>()
+        cache.countLimit = 150
+        return cache
+    }()
     
     // Precompiled Static Regexes (Eradicates repeated compilation in inner loops)
     private static let standardRegex: NSRegularExpression? = {
-        try? NSRegularExpression(pattern: #"^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$"#)
+        try? NSRegularExpression(pattern: #"^\[(\d{1,3}):([0-5]\d)(?:\.(\d{1,3}))?\](.*)$"#)
     }()
     
     private static let wordRegex: NSRegularExpression? = {
-        try? NSRegularExpression(pattern: #"<(\d{2}):(\d{2})\.(\d{2,3})>([^<]+)"#)
+        try? NSRegularExpression(pattern: #"<(\d{1,3}):([0-5]\d)(?:\.(\d{1,3}))?>([^<]+)"#)
+    }()
+
+    private static let titleCleanerRegexes: [NSRegularExpression] = {
+        let patterns = [
+            #"\(feat\..*?\)"#,
+            #"\[feat\..*?\]"#,
+            #"\(with.*?\)"#,
+            #"\(remaster.*?\)"#,
+            #"\[remaster.*?\]"#,
+            #"- remaster.*"#,
+            #"\(deluxe.*?\)"#,
+            #"\(live.*?\)"#,
+            #"\[live.*?\]"#,
+            #"\(anniversary.*?\)"#
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0, options: .caseInsensitive) }
     }()
     
     private init() {
@@ -121,8 +141,11 @@ public final class LyricsFetcher: ObservableObject {
     }
     
     public func fetchLyrics(track: String, artist: String, album: String = "", duration: Double = 0) {
-        let trimmedTrack = track.trimmingCharacters(in: .whitespaces)
-        let trimmedArtist = artist.trimmingCharacters(in: .whitespaces)
+        // Sanitize untrusted input: strip control characters and cap excessive length
+        let sanitizedTrack = track.components(separatedBy: .controlCharacters).joined()
+        let sanitizedArtist = artist.components(separatedBy: .controlCharacters).joined()
+        let trimmedTrack = String(sanitizedTrack.trimmingCharacters(in: .whitespaces).prefix(160))
+        let trimmedArtist = String(sanitizedArtist.trimmingCharacters(in: .whitespaces).prefix(160))
         guard !trimmedTrack.isEmpty else { return }
         
         // If already showing verified lyrics for this track, avoid redundant network queries
@@ -196,22 +219,8 @@ public final class LyricsFetcher: ObservableObject {
     // Clean artist and track titles to strip out '(Remastered)', '(feat. ...)', etc.
     private func cleanTrackTitle(_ title: String) -> String {
         var clean = title
-        let patterns = [
-            #"\(feat\..*?\)"#,
-            #"\[feat\..*?\]"#,
-            #"\(with.*?\)"#,
-            #"\(remaster.*?\)"#,
-            #"\[remaster.*?\]"#,
-            #"- remaster.*"#,
-            #"\(deluxe.*?\)"#,
-            #"\(live.*?\)"#,
-            #"\[live.*?\]"#,
-            #"\(anniversary.*?\)"#
-        ]
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                clean = regex.stringByReplacingMatches(in: clean, range: NSRange(clean.startIndex..., in: clean), withTemplate: "")
-            }
+        for regex in Self.titleCleanerRegexes {
+            clean = regex.stringByReplacingMatches(in: clean, range: NSRange(clean.startIndex..., in: clean), withTemplate: "")
         }
         return clean.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -234,6 +243,12 @@ public final class LyricsFetcher: ObservableObject {
         }
     }
     
+    private func untrackTask(_ task: URLSessionTask) {
+        taskQueue.sync {
+            self.activeTasks.removeAll { $0 === task }
+        }
+    }
+    
     private func fetchFromLRCLIB(track: String, artist: String, album: String, duration: Double, generation: Int, completion: @escaping (LyricsData?) -> Void) {
         var components = URLComponents(string: "https://lrclib.net/api/get")
         var queryItems = [
@@ -253,7 +268,9 @@ public final class LyricsFetcher: ObservableObject {
             return
         }
         
-        let task = session.dataTask(with: url) { [weak self] data, response, error in
+        var task: URLSessionDataTask?
+        task = session.dataTask(with: url) { [weak self, weak task] data, response, error in
+            if let t = task { self?.untrackTask(t) }
             guard let self = self, self.activeGeneration == generation else { return }
             guard let data = data, error == nil else {
                 completion(nil)
@@ -279,8 +296,10 @@ public final class LyricsFetcher: ObservableObject {
             let parsed = self.parseLRC(rawLyrics, track: track, artist: artist, source: "LRCLIB")
             completion(parsed)
         }
-        trackTask(task)
-        task.resume()
+        if let t = task {
+            trackTask(t)
+            t.resume()
+        }
     }
     
     private func searchLRCLIB(track: String, artist: String, generation: Int, completion: @escaping (LyricsData?) -> Void) {
@@ -294,7 +313,9 @@ public final class LyricsFetcher: ObservableObject {
             return
         }
         
-        let task = session.dataTask(with: url) { [weak self] data, _, error in
+        var task: URLSessionDataTask?
+        task = session.dataTask(with: url) { [weak self, weak task] data, _, error in
+            if let t = task { self?.untrackTask(t) }
             guard let self = self, self.activeGeneration == generation else { return }
             guard let data = data, error == nil else {
                 completion(nil)
@@ -322,8 +343,10 @@ public final class LyricsFetcher: ObservableObject {
             let parsed = self.parseLRC(raw, track: track, artist: artist, source: "LRCLIB (Search)")
             completion(parsed)
         }
-        trackTask(task)
-        task.resume()
+        if let t = task {
+            trackTask(t)
+            t.resume()
+        }
     }
     
     private func fetchFromNetEase(track: String, artist: String, generation: Int, completion: @escaping (LyricsData?) -> Void) {
@@ -344,14 +367,16 @@ public final class LyricsFetcher: ObservableObject {
         var request = URLRequest(url: searchUrl)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         
-        let task = session.dataTask(with: request) { [weak self] data, _, error in
+        var mainTask: URLSessionDataTask?
+        mainTask = session.dataTask(with: request) { [weak self, weak mainTask] data, _, error in
+            if let t = mainTask { self?.untrackTask(t) }
             guard let self = self, self.activeGeneration == generation else { return }
             guard let data = data, error == nil,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let result = json["result"] as? [String: Any],
                   let songs = result["songs"] as? [[String: Any]],
                   let firstSong = songs.first,
-                  let songId = firstSong["id"] as? Int else {
+                  let songId = (firstSong["id"] as? NSNumber)?.intValue ?? (firstSong["id"] as? Int) else {
                 completion(nil)
                 return
             }
@@ -361,8 +386,10 @@ public final class LyricsFetcher: ObservableObject {
                 return
             }
             
-            let subTask = self.session.dataTask(with: lyricUrl) { lData, _, lError in
-                guard self.activeGeneration == generation else { return }
+            var subTask: URLSessionDataTask?
+            subTask = self.session.dataTask(with: lyricUrl) { [weak self, weak subTask] lData, _, lError in
+                if let st = subTask { self?.untrackTask(st) }
+                guard let self = self, self.activeGeneration == generation else { return }
                 guard let lData = lData, lError == nil,
                       let lJson = try? JSONSerialization.jsonObject(with: lData) as? [String: Any],
                       let lrcObj = lJson["lrc"] as? [String: Any],
@@ -375,11 +402,15 @@ public final class LyricsFetcher: ObservableObject {
                 let parsed = self.parseLRC(lrcStr, track: track, artist: artist, source: "NetEase Cloud")
                 completion(parsed)
             }
-            self.trackTask(subTask)
-            subTask.resume()
+            if let st = subTask {
+                self.trackTask(st)
+                st.resume()
+            }
         }
-        trackTask(task)
-        task.resume()
+        if let mt = mainTask {
+            trackTask(mt)
+            mt.resume()
+        }
     }
     
     public func parseLRC(_ text: String, track: String, artist: String, source: String = "LRCLIB") -> LyricsData {
@@ -398,13 +429,16 @@ public final class LyricsFetcher: ObservableObject {
             if let match = standardRegex?.firstMatch(in: line, options: [], range: range) {
                 let minStr = (line as NSString).substring(with: match.range(at: 1))
                 let secStr = (line as NSString).substring(with: match.range(at: 2))
-                let msStr = (line as NSString).substring(with: match.range(at: 3))
-                let content = (line as NSString).substring(with: match.range(at: 4)).trimmingCharacters(in: .whitespaces)
+                var milliseconds: Double = 0.0
+                if match.range(at: 3).location != NSNotFound {
+                    let msStr = (line as NSString).substring(with: match.range(at: 3))
+                    let msDiv: Double = pow(10.0, Double(max(1, msStr.count)))
+                    milliseconds = (Double(msStr) ?? 0.0) / msDiv
+                }
+                let content = match.range(at: 4).location != NSNotFound ? (line as NSString).substring(with: match.range(at: 4)).trimmingCharacters(in: .whitespaces) : ""
                 
                 let minutes = Double(minStr) ?? 0.0
                 let seconds = Double(secStr) ?? 0.0
-                let msDiv: Double = msStr.count == 2 ? 100.0 : 1000.0
-                let milliseconds = (Double(msStr) ?? 0.0) / msDiv
                 let lineTime = (minutes * 60.0) + seconds + milliseconds
                 
                 // Check if line contains word-level bracketed tags: <mm:ss.xx>Word
@@ -415,11 +449,14 @@ public final class LyricsFetcher: ObservableObject {
                     for wMatch in wordMatches {
                         let wMin = Double((content as NSString).substring(with: wMatch.range(at: 1))) ?? 0
                         let wSec = Double((content as NSString).substring(with: wMatch.range(at: 2))) ?? 0
-                        let wMsStr = (content as NSString).substring(with: wMatch.range(at: 3))
-                        let wMsDiv: Double = wMsStr.count == 2 ? 100.0 : 1000.0
-                        let wMs = (Double(wMsStr) ?? 0.0) / wMsDiv
+                        var wMs: Double = 0.0
+                        if wMatch.range(at: 3).location != NSNotFound {
+                            let wMsStr = (content as NSString).substring(with: wMatch.range(at: 3))
+                            let wMsDiv: Double = pow(10.0, Double(max(1, wMsStr.count)))
+                            wMs = (Double(wMsStr) ?? 0.0) / wMsDiv
+                        }
                         let wordTime = (wMin * 60.0) + wSec + wMs
-                        let wordText = (content as NSString).substring(with: wMatch.range(at: 4)).trimmingCharacters(in: .whitespaces)
+                        let wordText = wMatch.range(at: 4).location != NSNotFound ? (content as NSString).substring(with: wMatch.range(at: 4)).trimmingCharacters(in: .whitespaces) : ""
                         if !wordText.isEmpty {
                             words.append(WordToken(text: wordText, timestamp: wordTime))
                         }

@@ -177,6 +177,7 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
     }
     
     public func stream(_ stream: SCStream, didStopWithError error: Error) {
+        self.stream = nil
         startSimulatedFallback()
     }
 }
