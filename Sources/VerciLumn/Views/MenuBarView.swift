@@ -29,151 +29,140 @@ public struct MenuBarView: View {
     }
     
     public var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 14) {
-                // Header & Now Playing
-                HStack {
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.pink)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("VerciLumn Engine")
-                            .font(.headline)
-                        Text(playback.currentTrack.isPlaying ? "\(playback.currentTrack.title) • \(playback.currentTrack.artist)" : "Playback Paused")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            // Header & Now Playing
+            HStack(spacing: 10) {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.pink)
                 
-                Divider()
-                
-                // 1. Window Placement Layer
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Display Placement")
-                        .font(.caption)
-                        .fontWeight(.bold)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("VerciLumn Engine")
+                        .font(.system(size: 15, weight: .bold))
+                    Text(playback.currentTrack.isPlaying ? "\(playback.currentTrack.title) • \(playback.currentTrack.artist)" : "No Music Playing")
+                        .font(.system(size: 12))
                         .foregroundColor(.secondary)
-                    
-                    Picker("", selection: $displayMode) {
-                        ForEach(WindowDisplayMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.radioGroup)
-                    .onChange(of: displayMode) { _, newMode in
-                        windowManager.setDisplayMode(newMode)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+            .padding(.bottom, 2)
+            
+            Divider()
+            
+            // 1. Display Placement
+            VStack(alignment: .leading, spacing: 6) {
+                Text("WINDOW LAYER")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                
+                Picker("", selection: $displayMode) {
+                    ForEach(WindowDisplayMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
                     }
                 }
-                
-                Divider()
-                
-                // 2. Backdrop Style (Solve Bright Wallpaper)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Backdrop / Canvas Style")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
-                    
-                    Picker("", selection: $backdropMode) {
-                        ForEach(BackdropMode.allCases) { bMode in
-                            Text(bMode.rawValue).tag(bMode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                
-                Divider()
-                
-                // 3. Lyric Visual Style
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Lyric Visual Style")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
-                    
-                    Picker("", selection: $currentStyle) {
-                        ForEach(LyricStyle.allCases) { style in
-                            Text(style.rawValue).tag(style)
-                        }
-                    }
-                    .pickerStyle(.radioGroup)
-                }
-                
-                Divider()
-                
-                // 4. Vocal Timing Calibration Slider
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Vocal Sync Calibration")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(String(format: "%+.2fs", timingOffset))
-                            .font(.caption)
-                            .monospacedDigit()
-                    }
-                    
-                    HStack {
-                        Slider(value: $timingOffset, in: -1.5...1.5, step: 0.05)
-                        Button("Reset") {
-                            timingOffset = 0.0
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    }
-                }
-                
-                Divider()
-                
-                // 5. Bezel Glow Controls
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Audio-Reactive Bezel Glow", isOn: $isBezelEnabled)
-                        .font(.subheadline)
-                    
-                    if isBezelEnabled {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text("Beat Sensitivity")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Spacer()
-                                Text(String(format: "%.1fx", glowSensitivity))
-                                    .font(.caption)
-                                    .monospacedDigit()
-                            }
-                            Slider(value: $glowSensitivity, in: 0.5...2.5, step: 0.1)
-                        }
-                    }
-                }
-                
-                Divider()
-                
-                // 6. Diagnostics & Quit
-                HStack {
-                    Circle()
-                        .fill(audio.isCapturing ? Color.green : Color.orange)
-                        .frame(width: 8, height: 8)
-                    Text(audio.isCapturing ? "Beat Engine Active" : "Beat Engine Idle")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    Button(role: .destructive) {
-                        NSApplication.shared.terminate(nil)
-                    } label: {
-                        Text("Quit VerciLumn")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.red)
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .onChange(of: displayMode) { _, newMode in
+                    windowManager.setDisplayMode(newMode)
                 }
             }
-            .padding(14)
+            
+            // 2. Backdrop Style
+            VStack(alignment: .leading, spacing: 6) {
+                Text("CANVAS BACKDROP")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                
+                Picker("", selection: $backdropMode) {
+                    ForEach(BackdropMode.allCases) { bMode in
+                        Text(bMode.rawValue).tag(bMode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            
+            // 3. Lyric Visual Style
+            VStack(alignment: .leading, spacing: 6) {
+                Text("LYRIC VISUAL STYLE")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                
+                Picker("", selection: $currentStyle) {
+                    ForEach(LyricStyle.allCases) { style in
+                        Text(style.rawValue).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            
+            Divider()
+            
+            // 4. Vocal Sync Calibration Slider
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("VOCAL SYNC OFFSET")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(String(format: "%+.2fs", timingOffset))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                }
+                
+                HStack(spacing: 8) {
+                    Slider(value: $timingOffset, in: -1.5...1.5, step: 0.05)
+                    Button("0s") {
+                        timingOffset = 0.0
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            
+            // 5. Bezel Glow Controls
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Beat-Reactive Bezel Glow", isOn: $isBezelEnabled)
+                    .font(.system(size: 13, weight: .medium))
+                
+                if isBezelEnabled {
+                    HStack {
+                        Text("Sensitivity")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Slider(value: $glowSensitivity, in: 0.5...2.5, step: 0.1)
+                        Text(String(format: "%.1fx", glowSensitivity))
+                            .font(.system(size: 11, design: .monospaced))
+                            .frame(width: 32)
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // 6. Diagnostics & Quit
+            HStack {
+                Circle()
+                    .fill(audio.isCapturing ? Color.green : Color.orange)
+                    .frame(width: 8, height: 8)
+                Text(audio.isCapturing ? "Audio Engine Active" : "Audio Engine Idle")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Button(role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                } label: {
+                    Text("Quit")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
-        .frame(width: 320, height: 460)
+        .padding(18)
+        .frame(width: 320)
     }
 }
