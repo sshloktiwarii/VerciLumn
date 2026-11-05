@@ -62,7 +62,10 @@ public final class AppSettings: ObservableObject {
     }
     
     @Published public var displayMode: WindowDisplayMode {
-        didSet { UserDefaults.standard.set(displayMode.rawValue, forKey: Keys.displayMode) }
+        didSet {
+            UserDefaults.standard.set(displayMode.rawValue, forKey: Keys.displayMode)
+            OverlayWindowManager.shared.setDisplayMode(displayMode)
+        }
     }
     
     @Published public var backdropMode: BackdropMode {

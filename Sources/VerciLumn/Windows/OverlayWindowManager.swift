@@ -28,6 +28,14 @@ public final class OverlayWindowManager: ObservableObject {
             }
             .store(in: &cancellables)
             
+        // Observe Display Mode changes (fullStage, desktop, floating)
+        AppSettings.shared.$displayMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] mode in
+                self?.setDisplayMode(mode)
+            }
+            .store(in: &cancellables)
+            
         // Observe Immersive Mode (auto-hide Menu Bar and Dock without macOS Space slide)
         AppSettings.shared.$isImmersiveModeEnabled
             .sink { [weak self] enabled in
@@ -43,7 +51,7 @@ public final class OverlayWindowManager: ObservableObject {
     }
     
     public func updateClickThroughBehavior(for mode: BackdropMode) {
-        let isPassThrough = (mode == .transparent)
+        let isPassThrough = (mode == .transparent || currentMode == .floating)
         for panel in panels {
             panel.setIgnoresMouseEventsStrict(isPassThrough)
         }
@@ -117,7 +125,7 @@ public final class OverlayWindowManager: ObservableObject {
             for panel in self.panels {
                 panel.expandToScreenBounds()
                 panel.updateWindowLevel()
-                if enabled {
+                if enabled && panel.displayMode != .floating {
                     panel.makeKeyAndOrderFront(nil)
                 }
             }
@@ -130,7 +138,9 @@ public final class OverlayWindowManager: ObservableObject {
     
     public func setDisplayMode(_ mode: WindowDisplayMode) {
         self.currentMode = mode
+        let isPassThrough = (AppSettings.shared.backdropMode == .transparent || mode == .floating)
         for panel in panels {
+            panel.setIgnoresMouseEventsStrict(isPassThrough)
             panel.setDisplayMode(mode)
         }
     }

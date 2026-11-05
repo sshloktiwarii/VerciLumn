@@ -52,8 +52,8 @@ public struct RootOverlayView: View {
         
         ZStack {
             if isPlaying || isLocked {
-                // 1. Dynamic Canvas Backdrop (Only if not transparent)
-                if settings.backdropMode != .transparent {
+                // 1. Dynamic Canvas Backdrop (Only if not transparent and not in floating overlay mode)
+                if settings.backdropMode != .transparent && settings.displayMode != .floating {
                     backdropLayer
                         .ignoresSafeArea()
                         .allowsHitTesting(false)

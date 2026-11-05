@@ -23,7 +23,7 @@ public final class InteractivePassThroughHostingView<Content: View>: NSHostingVi
     }
     
     public override func hitTest(_ point: NSPoint) -> NSView? {
-        let isTransparent = AppSettings.shared.backdropMode == .transparent
+        let isTransparent = (AppSettings.shared.backdropMode == .transparent || AppSettings.shared.displayMode == .floating)
         
         // If not transparent (i.e. solid dark stage like OLED black), visualizer controls receive clicks
         if !isTransparent {
@@ -114,13 +114,6 @@ public final class StageOverlayPanel: NSPanel {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            if AppSettings.shared.isImmersiveModeEnabled {
-                // In borderless Immersive Mode, elevate to full stage above normal windows without native macOS space switch
-                self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) - 1)
-                self.orderFrontRegardless()
-                return
-            }
-            
             switch self.displayMode {
             case .fullStage:
                 self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) - 1)
@@ -130,6 +123,7 @@ public final class StageOverlayPanel: NSPanel {
                 self.level = NSWindow.Level(rawValue: -1)
                 self.orderFront(nil)
             case .floating:
+                // Elevated strictly above normal application windows and floating panels (level 4)
                 self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
                 self.orderFrontRegardless()
             }
@@ -137,11 +131,11 @@ public final class StageOverlayPanel: NSPanel {
     }
     
     public override var canBecomeKey: Bool {
-        return AppSettings.shared.isImmersiveModeEnabled
+        return AppSettings.shared.isImmersiveModeEnabled && self.displayMode != .floating
     }
     
     public override var canBecomeMain: Bool {
-        return AppSettings.shared.isImmersiveModeEnabled
+        return AppSettings.shared.isImmersiveModeEnabled && self.displayMode != .floating
     }
 }
 

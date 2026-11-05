@@ -58,12 +58,31 @@ final class VerciLumnTests: XCTestCase {
         let panel = StageOverlayPanel(contentView: NSView())
         XCTAssertEqual(panel.displayMode, .desktop)
         
+        let exp = expectation(description: "Window level transitions")
+        
         // Mode transitions
         panel.setDisplayMode(.floating)
         XCTAssertEqual(panel.displayMode, .floating)
         
-        panel.setDisplayMode(.desktop)
-        XCTAssertEqual(panel.displayMode, .desktop)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            XCTAssertEqual(panel.level.rawValue, Int(CGWindowLevelForKey(.floatingWindow)) + 1)
+            
+            panel.setDisplayMode(.desktop)
+            XCTAssertEqual(panel.displayMode, .desktop)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                XCTAssertEqual(panel.level.rawValue, -1)
+                
+                panel.setDisplayMode(.fullStage)
+                XCTAssertEqual(panel.displayMode, .fullStage)
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    XCTAssertEqual(panel.level.rawValue, Int(CGWindowLevelForKey(.floatingWindow)) - 1)
+                    exp.fulfill()
+                }
+            }
+        }
+        wait(for: [exp], timeout: 2.0)
         
         // Strict mouse ignores test
         panel.setIgnoresMouseEventsStrict(true)

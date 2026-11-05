@@ -207,6 +207,26 @@ public struct CommandPaletteView: View {
                 }
             ),
             CommandItem(
+                title: "Switch to Floating Top Overlay",
+                subtitle: "Float lyrics on top of all active apps (Chrome, VS Code, Terminal)",
+                icon: "square.stack.3d.up.fill",
+                category: .stage,
+                shortcut: nil,
+                action: {
+                    settings.displayMode = .floating
+                }
+            ),
+            CommandItem(
+                title: "Switch to Desktop Wallpaper Mode",
+                subtitle: "Pin visualizer behind all desktop windows directly above wallpaper",
+                icon: "display",
+                category: .stage,
+                shortcut: nil,
+                action: {
+                    settings.displayMode = .desktop
+                }
+            ),
+            CommandItem(
                 title: settings.isImmersiveModeEnabled ? "Exit Borderless Immersive Mode" : "Enter Borderless Immersive Mode",
                 subtitle: "Auto-hide Dock & Menu Bar without macOS Space sliding animation",
                 icon: "arrow.up.left.and.arrow.down.right.square",
