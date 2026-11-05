@@ -89,81 +89,12 @@ public struct BezelGlowView: View {
                 let maxPulse = max(bottomPulse, max(leftPulse, max(rightPulse, topPulse)))
                 
                 ZStack {
-                    // MARK: - Multi-Zone Edge Bloom Gradients (Diffuse Ambilight Projection)
-                    // Bottom: Sub-bass bloom
-                    if bottomPulse > 0.06 {
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                bottomColor.opacity(Double(bottomPulse) * 0.7),
-                                bottomColor.opacity(Double(bottomPulse) * 0.25),
-                                Color.clear
-                            ]),
-                            startPoint: .bottom,
-                            endPoint: .top
-                        )
-                        .frame(height: max(20, 70 * bottomPulse))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .blur(radius: 14 + 10 * bottomPulse)
-                        .transition(.opacity)
-                    }
-                    
-                    // Top: Treble shimmer bloom
-                    if topPulse > 0.06 {
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                topColor.opacity(Double(topPulse) * 0.65),
-                                topColor.opacity(Double(topPulse) * 0.2),
-                                Color.clear
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: max(16, 55 * topPulse))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .blur(radius: 12 + 8 * topPulse)
-                        .transition(.opacity)
-                    }
-                    
-                    // Left: Mids / Vocals bloom
-                    if leftPulse > 0.06 {
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                leftColor.opacity(Double(leftPulse) * 0.65),
-                                leftColor.opacity(Double(leftPulse) * 0.2),
-                                Color.clear
-                            ]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: max(16, 55 * leftPulse))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                        .blur(radius: 12 + 8 * leftPulse)
-                        .transition(.opacity)
-                    }
-                    
-                    // Right: High-mid percussion bloom
-                    if rightPulse > 0.06 {
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                rightColor.opacity(Double(rightPulse) * 0.65),
-                                rightColor.opacity(Double(rightPulse) * 0.2),
-                                Color.clear
-                            ]),
-                            startPoint: .trailing,
-                            endPoint: .leading
-                        )
-                        .frame(width: max(16, 55 * rightPulse))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                        .blur(radius: 12 + 8 * rightPulse)
-                        .transition(.opacity)
-                    }
-                    
-                    // MARK: - Perimeter Bezel Precision Stroke
+                    // MARK: - Perimeter Bezel Precision Contour (Zero-Haze Architecture)
                     if maxPulse > 0.05 {
                         let strokeWidth = 2.0 + (maxPulse * 4.5)
-                        let opacity = min(1.0, maxPulse * 0.9)
+                        let opacity = min(1.0, maxPulse * 0.95)
                         
-                        // Angular gradient blending all 4 zones around the screen perimeter:
+                        // Angular gradient blending all 4 zones around the physical screen perimeter:
                         // Top (air) -> Right (presence) -> Bottom (sub-bass) -> Left (mids) -> Top
                         let perimeterGradient = AngularGradient(
                             stops: [
@@ -178,8 +109,7 @@ public struct BezelGlowView: View {
                         
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(perimeterGradient, lineWidth: strokeWidth)
-                            .shadow(color: bottomColor.opacity(Double(bottomPulse) * 0.5), radius: 6 + (bottomPulse * 8), x: 0, y: 4)
-                            .shadow(color: topColor.opacity(Double(topPulse) * 0.4), radius: 6 + (topPulse * 8), x: 0, y: -3)
+                            .shadow(color: bottomColor.opacity(Double(bottomPulse) * 0.4), radius: 4 + (bottomPulse * 6), x: 0, y: 3)
                             .opacity(opacity)
                             .padding(2)
                             .ignoresSafeArea()

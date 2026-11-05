@@ -108,7 +108,7 @@ public final class StageOverlayPanel: NSPanel {
                 self.orderFrontRegardless()
             case .desktop:
                 // Sits strictly above desktop wallpaper & shadow, strictly behind all normal user applications
-                self.level = NSWindow.Level(Int(CGWindowLevelForKey(.desktopWindow)) + 1)
+                self.level = NSWindow.Level(rawValue: -1)
                 self.orderFront(nil)
             case .floating:
                 self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
