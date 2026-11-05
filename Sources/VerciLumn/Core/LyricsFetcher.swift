@@ -259,7 +259,16 @@ public final class LyricsFetcher: ObservableObject {
         }
     }
     
-    private func fetchFromLRCLIB(track: String, artist: String, album: String, duration: Double, generation: Int, completion: @escaping (LyricsData?) -> Void) {
+    private func fetchFromLRCLIB(
+        track: String,
+        artist: String,
+        album: String,
+        duration: Double,
+        generation: Int,
+        retryCount: Int = 0,
+        maxRetries: Int = 2,
+        completion: @escaping (LyricsData?) -> Void
+    ) {
         var components = URLComponents(string: "https://lrclib.net/api/get")
         var queryItems = [
             URLQueryItem(name: "track_name", value: track),
@@ -282,6 +291,25 @@ public final class LyricsFetcher: ObservableObject {
         task = session.dataTask(with: url) { [weak self, weak task] data, response, error in
             if let t = task { self?.untrackTask(t) }
             guard let self = self, self.activeGeneration == generation else { return }
+            
+            // Check HTTP status code for server error (5xx) or rate limit (429)
+            if let http = response as? HTTPURLResponse, (http.statusCode == 429 || http.statusCode >= 500), retryCount < maxRetries {
+                let delay = pow(2.0, Double(retryCount)) * 0.5 // 0.5s, 1.0s exponential backoff
+                self.taskQueue.asyncAfter(deadline: .now() + delay) {
+                    self.fetchFromLRCLIB(
+                        track: track,
+                        artist: artist,
+                        album: album,
+                        duration: duration,
+                        generation: generation,
+                        retryCount: retryCount + 1,
+                        maxRetries: maxRetries,
+                        completion: completion
+                    )
+                }
+                return
+            }
+            
             guard let data = data, error == nil else {
                 completion(nil)
                 return

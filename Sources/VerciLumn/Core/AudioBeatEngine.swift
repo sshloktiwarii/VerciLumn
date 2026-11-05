@@ -27,7 +27,8 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
     public func startCapture() {
         guard !isCapturing else { return }
         
-        Task {
+        Task { [weak self] in
+            guard let self = self else { return }
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
                 guard let display = content.displays.first else {
@@ -49,7 +50,8 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
                 try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: self.audioQueue)
                 try await stream.startCapture()
                 
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
                     self.stream = stream
                     self.isCapturing = true
                     self.isHardwareCaptureActive = true

@@ -22,5 +22,13 @@
     <string>VerciLumn requires audio capture permissions to generate real-time beat reactive visuals.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>VerciLumn reads now-playing track information from Spotify and Apple Music.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>VerciLumn uses microphone input as a fallback to generate real-time ambient lighting beats when system audio capture is unavailable.</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/sshloktiwarii/VerciLumn/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>SPARKLE_ED25519_PUBLIC_KEY_PLACEHOLDER</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
