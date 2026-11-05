@@ -45,7 +45,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Compensate for lyrics trailing behind audio",
                 icon: "plus.circle.fill",
                 category: .timing,
-                shortcut: "]",
+                shortcut: "⌘⌥]",
                 action: {
                     settings.nudgeTimingOffset(by: 0.10)
                 }
@@ -55,7 +55,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Compensate for lyrics jumping ahead of audio",
                 icon: "minus.circle.fill",
                 category: .timing,
-                shortcut: "[",
+                shortcut: "⌘⌥[",
                 action: {
                     settings.nudgeTimingOffset(by: -0.10)
                 }
@@ -65,7 +65,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Restore natural LRC track timing",
                 icon: "arrow.counterclockwise.circle.fill",
                 category: .timing,
-                shortcut: "0",
+                shortcut: "⌘⌥0",
                 action: {
                     settings.resetTimingOffset()
                 }
@@ -95,7 +95,7 @@ public struct CommandPaletteView: View {
                 subtitle: playback.currentTrack.isPlaying ? "Pause Spotify or Apple Music" : "Resume playback",
                 icon: playback.currentTrack.isPlaying ? "pause.fill" : "play.fill",
                 category: .playback,
-                shortcut: "Space",
+                shortcut: "⌘⌥Space",
                 action: {
                     playback.togglePlayPause()
                 }
@@ -195,15 +195,20 @@ public struct CommandPaletteView: View {
             
             // MARK: - Stage & Immersion
             CommandItem(
-                title: "Toggle Full Stage Immersion",
-                subtitle: "Switch between desktop pass-through and full stage",
+                title: "Cycle Display Mode (Desktop ↔ Floating ↔ Stage)",
+                subtitle: "Elevate window between wallpaper, top floating layer, or full stage",
                 icon: "macwindow.on.rectangle",
                 category: .stage,
-                shortcut: "⌘⇧L",
+                shortcut: "⌘⌥1",
                 action: {
-                    let next: WindowDisplayMode = (settings.displayMode == .fullStage) ? .desktop : .fullStage
+                    let current = settings.displayMode
+                    let next: WindowDisplayMode
+                    switch current {
+                    case .desktop: next = .floating
+                    case .floating: next = .fullStage
+                    case .fullStage: next = .desktop
+                    }
                     settings.displayMode = next
-                    windowManager.setDisplayMode(next)
                 }
             ),
             CommandItem(
@@ -231,7 +236,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Auto-hide Dock & Menu Bar without macOS Space sliding animation",
                 icon: "arrow.up.left.and.arrow.down.right.square",
                 category: .stage,
-                shortcut: "⌘⇧I",
+                shortcut: "⌘⌥3",
                 action: {
                     settings.isImmersiveModeEnabled.toggle()
                 }
@@ -241,7 +246,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Show/hide active singing word and spectrum at screen notch",
                 icon: "inset.filled.topthird.rectangle",
                 category: .stage,
-                shortcut: "⌘⇧N",
+                shortcut: "⌘⌥2",
                 action: {
                     settings.isNotchHUDEnabled.toggle()
                 }
@@ -251,7 +256,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Audio-reactive border glow mapped to FFT frequency zones",
                 icon: "rectangle.inset.filled",
                 category: .stage,
-                shortcut: nil,
+                shortcut: "⌘⌥4",
                 action: {
                     settings.isBezelEnabled.toggle()
                 }
@@ -285,7 +290,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Asynchronously translate foreign lyrics with local Ollama or Google Translate",
                 icon: "character.bubble.fill",
                 category: .timing,
-                shortcut: nil,
+                shortcut: "⌘⌥5",
                 action: {
                     settings.isTranslationEnabled.toggle()
                 }
@@ -315,7 +320,7 @@ public struct CommandPaletteView: View {
                 subtitle: "Switch accent colors, gradients, and typography",
                 icon: "paintpalette.fill",
                 category: .engine,
-                shortcut: "⌘⌥→",
+                shortcut: "⌘⌥9",
                 action: {
                     let all = ColorThemePreset.allCases
                     let idx = all.firstIndex(of: theme.currentTheme) ?? 0

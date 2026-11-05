@@ -52,7 +52,7 @@ public struct MenuBarView: View {
                         featureRow(
                             icon: "inset.filled.topthird.rectangle",
                             title: "Camera Notch Audio Capsule",
-                            shortcut: "⌘⇧N",
+                            shortcut: "⌘⌥2",
                             description: "Displays current singing word and audio spectrum around the camera notch.",
                             isOn: $settings.isNotchHUDEnabled
                         )
@@ -70,7 +70,7 @@ public struct MenuBarView: View {
                         featureRow(
                             icon: "rectangle.inset.filled",
                             title: "Display Border Glow Pulse",
-                            shortcut: nil,
+                            shortcut: "⌘⌥4",
                             description: "Pulses the outer display edges on low-frequency audio transients.",
                             isOn: $settings.isBezelEnabled
                         )
@@ -109,7 +109,7 @@ public struct MenuBarView: View {
                         featureRow(
                             icon: "character.bubble.fill",
                             title: "Live Lyric AI Translation",
-                            shortcut: nil,
+                            shortcut: "⌘⌥5",
                             description: "Translates synced lyrics asynchronously via local Ollama or Google Translate.",
                             isOn: $settings.isTranslationEnabled
                         )
@@ -118,7 +118,7 @@ public struct MenuBarView: View {
                         featureRow(
                             icon: "arrow.up.left.and.arrow.down.right.square",
                             title: "Borderless Immersive Mode",
-                            shortcut: "⌘⇧I",
+                            shortcut: "⌘⌥3",
                             description: "Auto-hides Dock & Menu Bar on current desktop without macOS Space slide.",
                             isOn: $settings.isImmersiveModeEnabled
                         )
@@ -339,7 +339,7 @@ public struct MenuBarView: View {
             // Dropdown 1: Window Layer Mode
             dropdownPicker(
                 label: "DISPLAY PRESENTATION",
-                sublabel: "Screen elevation, desktop wallpaper pass-through, and floating layer",
+                sublabel: "Screen elevation (⌘⌥1 to cycle: Desktop ↔ Floating ↔ Full Stage)",
                 selection: $settings.displayMode
             ) {
                 Text("Full Screen Stage").tag(WindowDisplayMode.fullStage)
@@ -467,13 +467,13 @@ public struct MenuBarView: View {
                 HStack(spacing: 3) {
                     Image(systemName: "command")
                         .font(.system(size: 10, weight: .bold))
-                    Text("⌘K")
+                    Text("⌘⌥K")
                         .font(.system(size: 11, weight: .medium))
                 }
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .help("Open floating Command Palette (⌘K)")
+            .help("Open floating Command Palette (⌘⌥K)")
             
             Button(role: .destructive) {
                 NSApplication.shared.terminate(nil)

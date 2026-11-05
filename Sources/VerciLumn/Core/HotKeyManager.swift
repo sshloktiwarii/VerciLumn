@@ -76,47 +76,81 @@ public final class HotKeyManager: ObservableObject {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let keyChar = event.charactersIgnoringModifiers?.lowercased()
         
-        // 1. Command + Shift + L -> Toggle Full Stage Immersion
-        if flags == [.command, .shift] && keyChar == "l" {
+        // 1. Command + Option + 1 -> Cycle Display Mode (Desktop -> Floating -> Full Stage)
+        // Replaces conflicting ⌘⇧L (which conflicts with Safari reading list / browser sidebar)
+        if flags == [.command, .option] && (keyChar == "1" || event.keyCode == 18) {
             DispatchQueue.main.async {
                 let current = AppSettings.shared.displayMode
-                let next: WindowDisplayMode = (current == .fullStage) ? .desktop : .fullStage
+                let next: WindowDisplayMode
+                switch current {
+                case .desktop: next = .floating
+                case .floating: next = .fullStage
+                case .fullStage: next = .desktop
+                }
                 AppSettings.shared.displayMode = next
-                OverlayWindowManager.shared.setDisplayMode(next)
             }
             return true
         }
         
-        // 2. Command + Shift + N -> Toggle Dynamic Notch Island
-        if flags == [.command, .shift] && keyChar == "n" {
+        // 2. Command + Option + 2 -> Toggle Dynamic Notch Island
+        // Replaces conflicting ⌘⇧N (which conflicts with Finder New Folder / Chrome Incognito)
+        if flags == [.command, .option] && (keyChar == "2" || event.keyCode == 19) {
             DispatchQueue.main.async {
                 AppSettings.shared.isNotchHUDEnabled.toggle()
             }
             return true
         }
         
-        // 2b. Command + Shift + I -> Toggle Borderless Immersive Mode (No Space switch)
-        if flags == [.command, .shift] && keyChar == "i" {
+        // 3. Command + Option + 3 -> Toggle Borderless Immersive Mode
+        // Replaces conflicting ⌘⇧I (which conflicts with Chrome/Safari Developer Inspect)
+        if flags == [.command, .option] && (keyChar == "3" || event.keyCode == 20) {
             DispatchQueue.main.async {
                 AppSettings.shared.isImmersiveModeEnabled.toggle()
             }
             return true
         }
         
-        // 3. Command + Option + RightArrow -> Cycle Lyric Themes
-        if flags == [.command, .option] && event.keyCode == 124 { // 124 = Right Arrow
+        // 4. Command + Option + 4 -> Toggle Multi-Zone Ambilight Bezel
+        // Numbered shortcut: doesn't clash with screenshot ⌘⇧4
+        if flags == [.command, .option] && (keyChar == "4" || event.keyCode == 21) {
             DispatchQueue.main.async {
-                let all = LyricStyle.allCases
-                let idx = all.firstIndex(of: AppSettings.shared.lyricStyle) ?? 0
-                AppSettings.shared.lyricStyle = all[(idx + 1) % all.count]
+                AppSettings.shared.isBezelEnabled.toggle()
             }
             return true
         }
         
-        // 4. Command + K -> Toggle Command Palette Overlay
-        if flags == .command && keyChar == "k" {
+        // 5. Command + Option + 5 -> Toggle Live Lyric AI Translation
+        // Numbered shortcut: doesn't clash with screen recording ⌘⇧5
+        if flags == [.command, .option] && (keyChar == "5" || event.keyCode == 23) {
+            DispatchQueue.main.async {
+                AppSettings.shared.isTranslationEnabled.toggle()
+            }
+            return true
+        }
+        
+        // 6. Command + Option + 0 -> Reset Lyric Sync Offset to 0ms
+        if flags == [.command, .option] && (keyChar == "0" || event.keyCode == 29) {
+            DispatchQueue.main.async {
+                AppSettings.shared.resetTimingOffset()
+            }
+            return true
+        }
+        
+        // 7. Command + Option + K -> Toggle Command Palette Overlay
+        // Replaces conflicting ⌘K (which hijacks Slack/VS Code quick open)
+        if flags == [.command, .option] && keyChar == "k" {
             DispatchQueue.main.async {
                 CommandPalettePanel.shared.toggle()
+            }
+            return true
+        }
+        
+        // 8. Command + Option + RightArrow or Command + Option + 9 -> Cycle Lyric Themes
+        if flags == [.command, .option] && (event.keyCode == 124 || keyChar == "9" || event.keyCode == 25) {
+            DispatchQueue.main.async {
+                let all = LyricStyle.allCases
+                let idx = all.firstIndex(of: AppSettings.shared.lyricStyle) ?? 0
+                AppSettings.shared.lyricStyle = all[(idx + 1) % all.count]
             }
             return true
         }
@@ -128,8 +162,9 @@ public final class HotKeyManager: ObservableObject {
         
         let isEditingText = isLocal && (event.window?.firstResponder is NSText || event.window?.firstResponder is NSTextView)
         
-        // 5. Command + [ or (local) [ -> Instant Lyric Sync Offset Nudge -100ms
-        if (flags == .command && event.charactersIgnoringModifiers == "[") ||
+        // 9. Command + Option + [ or (local palette) [ -> Instant Lyric Sync Offset Nudge -100ms
+        // Replaces conflicting ⌘[ (which triggers browser Back in Safari/Chrome)
+        if (flags == [.command, .option] && event.charactersIgnoringModifiers == "[") ||
            (isLocal && flags.isEmpty && !isEditingText && event.charactersIgnoringModifiers == "[") {
             DispatchQueue.main.async {
                 AppSettings.shared.nudgeTimingOffset(by: -0.10)
@@ -137,8 +172,9 @@ public final class HotKeyManager: ObservableObject {
             return true
         }
         
-        // 6. Command + ] or (local) ] -> Instant Lyric Sync Offset Nudge +100ms
-        if (flags == .command && event.charactersIgnoringModifiers == "]") ||
+        // 10. Command + Option + ] or (local palette) ] -> Instant Lyric Sync Offset Nudge +100ms
+        // Replaces conflicting ⌘] (which triggers browser Forward in Safari/Chrome)
+        if (flags == [.command, .option] && event.charactersIgnoringModifiers == "]") ||
            (isLocal && flags.isEmpty && !isEditingText && event.charactersIgnoringModifiers == "]") {
             DispatchQueue.main.async {
                 AppSettings.shared.nudgeTimingOffset(by: 0.10)
@@ -146,8 +182,8 @@ public final class HotKeyManager: ObservableObject {
             return true
         }
         
-        // 7. Command + Shift + Space -> Media Play/Pause
-        if flags == [.command, .shift] && event.keyCode == 49 { // 49 = Space
+        // 11. Command + Option + Space -> Media Play/Pause
+        if flags == [.command, .option] && event.keyCode == 49 { // 49 = Space
             PlaybackManager.shared.togglePlayPause()
             return true
         }
