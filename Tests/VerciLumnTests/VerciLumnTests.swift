@@ -282,4 +282,59 @@ final class VerciLumnTests: XCTestCase {
         XCTAssertTrue(lrclibBase.starts(with: "https://"))
         XCTAssertTrue(neteaseBase.starts(with: "https://"))
     }
+    
+    func testPowerEfficiencyAndLowPowerModeSuspension() {
+        let powerManager = PowerEfficiencyManager.shared
+        let renderer = MetalShaderRenderer.shared
+        
+        // Simulate entering Low Power Mode
+        powerManager.setSimulatedLowPowerMode(true)
+        XCTAssertTrue(powerManager.isLowPowerModeEnabled)
+        XCTAssertTrue(renderer.isSuspended)
+        
+        // Simulate exiting Low Power Mode
+        powerManager.setSimulatedLowPowerMode(false)
+        XCTAssertFalse(powerManager.isLowPowerModeEnabled)
+        XCTAssertFalse(renderer.isSuspended)
+    }
+    
+    func testParseTimeTokenSemanticCaching() {
+        let lrc = "[00:01.00]I love driving fast into the fire"
+        let lyrics = LyricsFetcher.shared.parseLRC(lrc, track: "Highway", artist: "Driver")
+        
+        XCTAssertEqual(lyrics.lines.count, 1)
+        let words = lyrics.lines[0].words
+        XCTAssertGreaterThan(words.count, 0)
+        
+        // Verify pre-computed semantic styles and icons on tokens
+        for word in words {
+            XCTAssertNotNil(word.semanticStyle)
+            if word.text == "love" {
+                XCTAssertEqual(word.iconSymbol, "heart.fill")
+                XCTAssertEqual(word.semanticStyle.mood, .love)
+            } else if word.text == "fire" {
+                XCTAssertEqual(word.semanticStyle.mood, .fire)
+            } else if word.text == "driving" {
+                XCTAssertEqual(word.iconSymbol, "steeringwheel")
+            }
+        }
+    }
+    
+    func testSmartHomeBridgeConfiguration() {
+        let bridge = SmartHomeBridge.shared
+        XCTAssertEqual(bridge.activeProtocol, .disabled)
+        
+        bridge.activeProtocol = .philipsHue
+        bridge.bridgeHost = "192.168.1.50"
+        bridge.apiToken = "test-token"
+        bridge.targetLightId = "2"
+        
+        // Sync color should execute without crash
+        bridge.syncColorToSmartHome(.red)
+        
+        bridge.activeProtocol = .nanoleaf
+        bridge.syncColorToSmartHome(.blue)
+        
+        bridge.activeProtocol = .disabled
+    }
 }
