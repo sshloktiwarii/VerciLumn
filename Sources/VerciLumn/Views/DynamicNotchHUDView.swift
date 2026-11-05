@@ -10,6 +10,9 @@ public struct DynamicNotchHUDView: View {
     @ObservedObject var settings = AppSettings.shared
     
     @State private var isHovered: Bool = false
+    @State private var isContextuallyVisible: Bool = false
+    @State private var dismissWorkItem: DispatchWorkItem? = nil
+    @State private var lastTrackId: String = ""
     
     public init() {}
     
@@ -26,54 +29,102 @@ public struct DynamicNotchHUDView: View {
         let currentTime = track.exactPosition(withOffset: settings.timingOffset)
         let activeLineIdx = lyrics.currentLyrics.activeLineIndex(at: currentTime) ?? 0
         let currentWordText = currentLyricWord(at: currentTime, activeLineIdx: activeLineIdx)
+        let isVisible = isContextuallyVisible || isHovered
         
         ZStack {
-            // Pill Container
-            VStack(spacing: 0) {
-                if isHovered {
-                    expandedHUD(track: track, activeColor: activeColor, currentWord: currentWordText)
-                        .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.95)), removal: .opacity))
-                } else {
-                    compactHUD(track: track, activeColor: activeColor, currentWord: currentWordText)
-                        .transition(.opacity)
+            if isVisible {
+                // Pill Container
+                VStack(spacing: 0) {
+                    if isHovered {
+                        expandedHUD(track: track, activeColor: activeColor, currentWord: currentWordText)
+                            .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.95)), removal: .opacity))
+                    } else {
+                        compactHUD(track: track, activeColor: activeColor, currentWord: currentWordText)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal, isHovered ? 18 : 12)
+                .padding(.vertical, isHovered ? 12 : 6)
+                .background(
+                    RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
+                        .fill(Color.black.opacity(0.85))
+                        .background(
+                            RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            activeColor.opacity(isHovered ? 0.6 : 0.25),
+                                            Color.white.opacity(0.12),
+                                            Color.clear
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(color: isHovered ? activeColor.opacity(0.35) : Color.black.opacity(0.4), radius: isHovered ? 16 : 8, y: 4)
+                )
+                .frame(width: isHovered ? 430 : (hasPhysicalNotch ? 360 : 320), height: isHovered ? 78 : (hasPhysicalNotch ? 38 : 36))
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: -20)),
+                    removal: .opacity.combined(with: .offset(y: -10))
+                ))
+            }
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.76), value: isHovered)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isContextuallyVisible)
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                isHovered = hovering
+            }
+            if hovering {
+                dismissWorkItem?.cancel()
+                dismissWorkItem = nil
+            } else {
+                scheduleDismissal(after: 2.0)
+            }
+        }
+        .onReceive(playback.$currentTrack) { newTrack in
+            let trackIdentifier = "\(newTrack.title)-\(newTrack.artist)-\(newTrack.isPlaying)"
+            if trackIdentifier != lastTrackId {
+                lastTrackId = trackIdentifier
+                if newTrack.isPlaying {
+                    triggerContextualDisplay()
                 }
             }
-            .padding(.horizontal, isHovered ? 18 : 12)
-            .padding(.vertical, isHovered ? 12 : 6)
-            .background(
-                RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
-                    .fill(Color.black.opacity(0.85))
-                    .background(
-                        RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        activeColor.opacity(isHovered ? 0.6 : 0.25),
-                                        Color.white.opacity(0.12),
-                                        Color.clear
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: isHovered ? activeColor.opacity(0.35) : Color.black.opacity(0.4), radius: isHovered ? 16 : 8, y: 4)
-            )
-            .frame(width: isHovered ? 430 : (hasPhysicalNotch ? 360 : 320), height: isHovered ? 78 : (hasPhysicalNotch ? 38 : 36))
-            .animation(.spring(response: 0.32, dampingFraction: 0.76), value: isHovered)
-            .onHover { hovering in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                    isHovered = hovering
-                }
+        }
+        .onAppear {
+            if playback.currentTrack.isPlaying {
+                triggerContextualDisplay()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, hasPhysicalNotch ? 0 : 8)
+    }
+    
+    private func triggerContextualDisplay() {
+        dismissWorkItem?.cancel()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isContextuallyVisible = true
+        }
+        scheduleDismissal(after: 3.0)
+    }
+    
+    private func scheduleDismissal(after seconds: Double) {
+        dismissWorkItem?.cancel()
+        let item = DispatchWorkItem {
+            guard !self.isHovered else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                self.isContextuallyVisible = false
+            }
+        }
+        dismissWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
     }
     
     // MARK: - Compact Mode
