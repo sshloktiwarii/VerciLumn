@@ -68,7 +68,12 @@ public struct RootOverlayView: View {
                 
                 // 3. Main Stage Layout (Non-Overlapping Vertical Hierarchy)
                 VStack(spacing: 0) {
-                    Spacer(minLength: 32)
+                    // Tactile Timing Sync Nudge HUD
+                    TimingHUDView()
+                        .padding(.top, 36)
+                        .allowsHitTesting(false)
+                    
+                    Spacer(minLength: 24)
                     
                     // Synced Lyrics Center Stage
                     VerciLyricsView(

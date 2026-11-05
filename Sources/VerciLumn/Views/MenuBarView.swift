@@ -137,12 +137,12 @@ public struct MenuBarView: View {
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundColor(.secondary)
                             }
-                            Text("Use ⌘+[ and ⌘+] to adjust sync latency.")
+                            Text("Use ⌘+[ and ⌘+] or [ / ] to nudge sync ±100ms.")
                                 .font(.system(size: 9))
                                 .foregroundColor(.secondary)
                             HStack(spacing: 8) {
                                 Slider(value: $settings.timingOffset, in: -1.5...1.5, step: 0.05)
-                                Button("0.0s") { settings.timingOffset = 0.0 }
+                                Button("0.0s") { settings.resetTimingOffset() }
                                     .buttonStyle(.bordered)
                                     .controlSize(.mini)
                             }
@@ -431,10 +431,24 @@ public struct MenuBarView: View {
             
             Spacer()
             
+            Button {
+                CommandPalettePanel.shared.toggle()
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "command")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("⌘K")
+                        .font(.system(size: 11, weight: .medium))
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Open floating Command Palette (⌘K)")
+            
             Button(role: .destructive) {
                 NSApplication.shared.terminate(nil)
             } label: {
-                Text("Quit VerciLumn")
+                Text("Quit")
                     .font(.system(size: 11, weight: .medium))
             }
             .buttonStyle(.bordered)

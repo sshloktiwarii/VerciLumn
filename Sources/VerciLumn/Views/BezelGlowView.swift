@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct BezelGlowView: View {
     @ObservedObject var audioEngine = AudioBeatEngine.shared
+    @ObservedObject var spectrum = AudioSpectrumEngine.shared
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var playback = PlaybackManager.shared
     
@@ -14,38 +15,154 @@ public struct BezelGlowView: View {
     }
     
     public var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geo in
+            // Strict thermal guard: 0% GPU when disabled or paused
             if isEnabled && playback.currentTrack.isPlaying {
                 let palette = theme.activePalette
-                let pulse = CGFloat(audioEngine.beatIntensity) * glowIntensityMultiplier
+                let bands = spectrum.bands
                 
-                if pulse > 0.05 {
-                    let strokeWidth = 2.0 + (pulse * 5.0)
-                    let opacity = min(1.0, pulse * 0.85)
+                // Discrete multi-zone frequency mapping from hardware vDSP FFT:
+                // 1. Sub-bass & Bass (Bands 0 & 1) -> Bottom Edge
+                let b0 = bands.indices.contains(0) ? CGFloat(bands[0]) : 0.05
+                let b1 = bands.indices.contains(1) ? CGFloat(bands[1]) : 0.05
+                let bottomPulse = min(1.0, (b0 * 0.75 + b1 * 0.25) * glowIntensityMultiplier)
+                
+                // 2. Low-Mid & Mid Vocals (Bands 2 & 3) -> Left Edge
+                let b2 = bands.indices.contains(2) ? CGFloat(bands[2]) : 0.05
+                let b3 = bands.indices.contains(3) ? CGFloat(bands[3]) : 0.05
+                let leftPulse = min(1.0, (b2 * 0.5 + b3 * 0.5) * glowIntensityMultiplier)
+                
+                // 3. High-Mid & Presence Percussion (Bands 4 & 5) -> Right Edge
+                let b4 = bands.indices.contains(4) ? CGFloat(bands[4]) : 0.05
+                let b5 = bands.indices.contains(5) ? CGFloat(bands[5]) : 0.05
+                let rightPulse = min(1.0, (b4 * 0.5 + b5 * 0.5) * glowIntensityMultiplier)
+                
+                // 4. Brilliance & Air Treble (Bands 6 & 7) -> Top Edge
+                let b6 = bands.indices.contains(6) ? CGFloat(bands[6]) : 0.05
+                let b7 = bands.indices.contains(7) ? CGFloat(bands[7]) : 0.05
+                let topPulse = min(1.0, (b6 * 0.5 + b7 * 0.5) * glowIntensityMultiplier)
+                
+                let maxPulse = max(bottomPulse, max(leftPulse, max(rightPulse, topPulse)))
+                
+                // Zone Colors
+                let (bottomColor, leftColor, rightColor, topColor): (Color, Color, Color, Color) = {
+                    if palette.isRainbow {
+                        return (
+                            Color(red: 1.0, green: 0.2, blue: 0.25),   // Warm Sub-Bass Red
+                            Color(red: 0.2, green: 0.9, blue: 0.5),   // Midrange Emerald
+                            Color(red: 0.2, green: 0.5, blue: 1.0),   // Presence Royal Blue
+                            Color(red: 0.85, green: 0.35, blue: 1.0)  // Treble Air Violet
+                        )
+                    } else {
+                        return (
+                            palette.highlightAccent,
+                            palette.secondaryGlow,
+                            palette.secondaryGlow.opacity(0.9),
+                            palette.highlightAccent.opacity(0.85)
+                        )
+                    }
+                }()
+                
+                ZStack {
+                    // MARK: - Multi-Zone Edge Bloom Gradients (Diffuse Ambilight Projection)
+                    // Bottom: Sub-bass bloom
+                    if bottomPulse > 0.06 {
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                bottomColor.opacity(Double(bottomPulse) * 0.7),
+                                bottomColor.opacity(Double(bottomPulse) * 0.25),
+                                Color.clear
+                            ]),
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
+                        .frame(height: max(20, 70 * bottomPulse))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .blur(radius: 14 + 10 * bottomPulse)
+                        .transition(.opacity)
+                    }
                     
-                    let gradientColors: [Color] = palette.isRainbow ? palette.rainbowGradient : [
-                        palette.highlightAccent,
-                        palette.secondaryGlow,
-                        palette.highlightAccent.opacity(0.8),
-                        palette.secondaryGlow.opacity(0.9),
-                        palette.highlightAccent
-                    ]
+                    // Top: Treble shimmer bloom
+                    if topPulse > 0.06 {
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                topColor.opacity(Double(topPulse) * 0.65),
+                                topColor.opacity(Double(topPulse) * 0.2),
+                                Color.clear
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: max(16, 55 * topPulse))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .blur(radius: 12 + 8 * topPulse)
+                        .transition(.opacity)
+                    }
                     
-                    let gradient = AngularGradient(
-                        gradient: Gradient(colors: gradientColors),
-                        center: .center
-                    )
+                    // Left: Mids / Vocals bloom
+                    if leftPulse > 0.06 {
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                leftColor.opacity(Double(leftPulse) * 0.65),
+                                leftColor.opacity(Double(leftPulse) * 0.2),
+                                Color.clear
+                            ]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: max(16, 55 * leftPulse))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .blur(radius: 12 + 8 * leftPulse)
+                        .transition(.opacity)
+                    }
                     
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(gradient, lineWidth: strokeWidth)
-                        .shadow(color: palette.highlightAccent.opacity(opacity * 0.7), radius: 8 + (pulse * 10))
-                        .opacity(opacity)
-                        .padding(2)
-                        .ignoresSafeArea()
-                        .animation(.easeOut(duration: 0.1), value: pulse)
+                    // Right: High-mid percussion bloom
+                    if rightPulse > 0.06 {
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                rightColor.opacity(Double(rightPulse) * 0.65),
+                                rightColor.opacity(Double(rightPulse) * 0.2),
+                                Color.clear
+                            ]),
+                            startPoint: .trailing,
+                            endPoint: .leading
+                        )
+                        .frame(width: max(16, 55 * rightPulse))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .blur(radius: 12 + 8 * rightPulse)
+                        .transition(.opacity)
+                    }
+                    
+                    // MARK: - Perimeter Bezel Precision Stroke
+                    if maxPulse > 0.05 {
+                        let strokeWidth = 2.0 + (maxPulse * 4.5)
+                        let opacity = min(1.0, maxPulse * 0.9)
+                        
+                        // Angular gradient blending all 4 zones around the screen perimeter:
+                        // Top (air) -> Right (presence) -> Bottom (sub-bass) -> Left (mids) -> Top
+                        let perimeterGradient = AngularGradient(
+                            stops: [
+                                .init(color: topColor.opacity(Double(topPulse)), location: 0.0),
+                                .init(color: rightColor.opacity(Double(rightPulse)), location: 0.25),
+                                .init(color: bottomColor.opacity(Double(bottomPulse)), location: 0.5),
+                                .init(color: leftColor.opacity(Double(leftPulse)), location: 0.75),
+                                .init(color: topColor.opacity(Double(topPulse)), location: 1.0)
+                            ],
+                            center: .center
+                        )
+                        
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(perimeterGradient, lineWidth: strokeWidth)
+                            .shadow(color: bottomColor.opacity(Double(bottomPulse) * 0.5), radius: 6 + (bottomPulse * 8), x: 0, y: 4)
+                            .shadow(color: topColor.opacity(Double(topPulse) * 0.4), radius: 6 + (topPulse * 8), x: 0, y: -3)
+                            .opacity(opacity)
+                            .padding(2)
+                            .ignoresSafeArea()
+                    }
                 }
+                .animation(.easeOut(duration: 0.1), value: maxPulse)
+                .allowsHitTesting(false)
             }
         }
     }
 }
-

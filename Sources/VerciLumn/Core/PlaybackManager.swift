@@ -204,6 +204,15 @@ public final class PlaybackManager: ObservableObject {
             artwork: finalArtwork,
             playerSource: newTrack.playerSource
         )
+        
+        ScreenSaverSharedState.sync(
+            isPlaying: newTrack.isPlaying,
+            title: newTrack.title,
+            artist: newTrack.artist,
+            album: newTrack.album,
+            beatIntensity: AudioBeatEngine.shared.beatIntensity,
+            bands: AudioSpectrumEngine.shared.bands
+        )
     }
     
     private func querySpotify() -> TrackState? {
@@ -379,6 +388,16 @@ public final class PlaybackManager: ObservableObject {
         guard !current.isNaN && !current.isInfinite && !duration.isNaN && !duration.isInfinite else { return }
         let target = min(duration, current + seconds)
         seekTo(seconds: target)
+    }
+    
+    // MARK: - Lyric Timing Sync Nudge (±100ms)
+    
+    public func nudgeTimingOffset(by delta: Double = 0.10) {
+        AppSettings.shared.nudgeTimingOffset(by: delta)
+    }
+    
+    public func resetTimingOffset() {
+        AppSettings.shared.resetTimingOffset()
     }
     
     // MARK: - Playback Media Controls

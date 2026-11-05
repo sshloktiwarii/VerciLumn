@@ -48,12 +48,12 @@ public final class HotKeyManager: ObservableObject {
     public func startHotkeyMonitors() {
         // Global Key Monitor (when other applications have focus)
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyEvent(event)
+            self?.handleKeyEvent(event, isLocal: false)
         }
         
         // Local Key Monitor (when VerciLumn has focus)
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.handleKeyEvent(event) == true {
+            if self?.handleKeyEvent(event, isLocal: true) == true {
                 return nil // consume event
             }
             return event
@@ -72,7 +72,7 @@ public final class HotKeyManager: ObservableObject {
     }
     
     @discardableResult
-    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+    private func handleKeyEvent(_ event: NSEvent, isLocal: Bool = false) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let keyChar = event.charactersIgnoringModifiers?.lowercased()
         
@@ -105,23 +105,33 @@ public final class HotKeyManager: ObservableObject {
             return true
         }
         
-        // 4. Command + [ -> Sync Offset -50ms
-        if flags == .command && event.charactersIgnoringModifiers == "[" {
+        // 4. Command + K -> Toggle Command Palette Overlay
+        if flags == .command && keyChar == "k" {
             DispatchQueue.main.async {
-                AppSettings.shared.timingOffset = min(max(AppSettings.shared.timingOffset - 0.05, -2.0), 2.0)
+                CommandPalettePanel.shared.toggle()
             }
             return true
         }
         
-        // 5. Command + ] -> Sync Offset +50ms
-        if flags == .command && event.charactersIgnoringModifiers == "]" {
+        // 5. Command + [ or (local) [ -> Instant Lyric Sync Offset Nudge -100ms
+        if (flags == .command && event.charactersIgnoringModifiers == "[") ||
+           (isLocal && flags.isEmpty && event.charactersIgnoringModifiers == "[") {
             DispatchQueue.main.async {
-                AppSettings.shared.timingOffset = min(max(AppSettings.shared.timingOffset + 0.05, -2.0), 2.0)
+                AppSettings.shared.nudgeTimingOffset(by: -0.10)
             }
             return true
         }
         
-        // 6. Command + Shift + Space -> Media Play/Pause
+        // 6. Command + ] or (local) ] -> Instant Lyric Sync Offset Nudge +100ms
+        if (flags == .command && event.charactersIgnoringModifiers == "]") ||
+           (isLocal && flags.isEmpty && event.charactersIgnoringModifiers == "]") {
+            DispatchQueue.main.async {
+                AppSettings.shared.nudgeTimingOffset(by: 0.10)
+            }
+            return true
+        }
+        
+        // 7. Command + Shift + Space -> Media Play/Pause
         if flags == [.command, .shift] && event.keyCode == 49 { // 49 = Space
             PlaybackManager.shared.togglePlayPause()
             return true

@@ -1,5 +1,6 @@
 import XCTest
 @testable import VerciLumn
+@testable import VerciLumnSaver
 
 final class VerciLumnTests: XCTestCase {
     func testTrackStatePositionInterpolation() {
@@ -336,5 +337,98 @@ final class VerciLumnTests: XCTestCase {
         bridge.syncColorToSmartHome(.blue)
         
         bridge.activeProtocol = .disabled
+    }
+    
+    // MARK: - Choice 1: Multi-Zone Ambilight Bezel Tests
+    
+    func testMultiZoneAmbilightBezelConfiguration() {
+        let spectrum = AudioSpectrumEngine.shared
+        XCTAssertEqual(spectrum.bands.count, 8)
+        
+        let bezel = BezelGlowView(isEnabled: true, glowIntensityMultiplier: 1.2)
+        XCTAssertTrue(bezel.isEnabled)
+        XCTAssertEqual(bezel.glowIntensityMultiplier, 1.2)
+        
+        // Feed sample buffer to verify hardware vector FFT execution
+        let samples = [Float](repeating: 0.25, count: 1024)
+        spectrum.processAudio(samples: samples)
+        XCTAssertEqual(spectrum.bands.count, 8)
+    }
+    
+    // MARK: - Choice 12: Command Palette & Instant Timing Nudge Tests
+    
+    func testCommandPaletteAndTimingNudge() {
+        let settings = AppSettings.shared
+        settings.resetTimingOffset()
+        XCTAssertEqual(settings.timingOffset, 0.0, accuracy: 0.001)
+        XCTAssertTrue(settings.isTimingHUDVisible)
+        XCTAssertTrue(settings.timingHUDMessage.contains("Reset"))
+        
+        // Nudge +100ms
+        settings.nudgeTimingOffset(by: 0.10)
+        XCTAssertEqual(settings.timingOffset, 0.10, accuracy: 0.001)
+        XCTAssertTrue(settings.isTimingHUDVisible)
+        XCTAssertTrue(settings.timingHUDMessage.contains("+100ms"))
+        
+        // Nudge -100ms twice
+        settings.nudgeTimingOffset(by: -0.10)
+        XCTAssertEqual(settings.timingOffset, 0.0, accuracy: 0.001)
+        settings.nudgeTimingOffset(by: -0.10)
+        XCTAssertEqual(settings.timingOffset, -0.10, accuracy: 0.001)
+        XCTAssertTrue(settings.timingHUDMessage.contains("-100ms"))
+        
+        // Reset via PlaybackManager
+        PlaybackManager.shared.resetTimingOffset()
+        XCTAssertEqual(settings.timingOffset, 0.0, accuracy: 0.001)
+        
+        // PlaybackManager nudge
+        PlaybackManager.shared.nudgeTimingOffset(by: 0.10)
+        XCTAssertEqual(settings.timingOffset, 0.10, accuracy: 0.001)
+        PlaybackManager.shared.resetTimingOffset()
+        
+        // CommandPalettePanel tests
+        let panel = CommandPalettePanel.shared
+        XCTAssertTrue(panel.canBecomeKey)
+        XCTAssertTrue(panel.canBecomeMain)
+        XCTAssertFalse(panel.isOpaque)
+        XCTAssertEqual(panel.level, .floating)
+    }
+    
+    // MARK: - Choice 3: Native macOS Screen Saver Bundle Tests
+    
+    func testNativeScreenSaverBundleArchitecture() {
+        // Test ScreenSaverView subclass conforms to ScreenSaver framework
+        let saver = VerciLumnSaverView(frame: NSRect(x: 0, y: 0, width: 1920, height: 1080), isPreview: false)
+        XCTAssertNotNil(saver)
+        XCTAssertEqual(saver?.animationTimeInterval ?? 0, 1.0 / 30.0, accuracy: 0.001)
+        XCTAssertFalse(saver?.hasConfigureSheet ?? true)
+        
+        // Run animation frames without throwing or leaking
+        for _ in 0..<10 {
+            saver?.animateOneFrame()
+        }
+        
+        // Test Preview Mode
+        let previewSaver = VerciLumnSaverView(frame: NSRect(x: 0, y: 0, width: 320, height: 180), isPreview: true)
+        XCTAssertNotNil(previewSaver)
+        previewSaver?.animateOneFrame()
+        
+        // Test Shared IPC state syncing
+        ScreenSaverSharedState.sync(
+            isPlaying: true,
+            title: "Outro",
+            artist: "M83",
+            album: "Hurry Up, We're Dreaming",
+            beatIntensity: 0.85,
+            bands: [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2]
+        )
+        
+        let readState = ScreenSaverSharedState.read()
+        XCTAssertTrue(readState.isPlaying)
+        XCTAssertEqual(readState.title, "Outro")
+        XCTAssertEqual(readState.artist, "M83")
+        XCTAssertEqual(readState.beatIntensity, 0.85, accuracy: 0.01)
+        XCTAssertEqual(readState.bands.count, 8)
+        XCTAssertEqual(readState.bands[0], 0.9, accuracy: 0.01)
     }
 }

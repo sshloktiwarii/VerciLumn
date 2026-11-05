@@ -10,3 +10,5 @@ DerivedData/
 *.profraw
 *.profdata
 *.log
+Products/
+*.saver

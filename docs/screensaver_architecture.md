@@ -60,3 +60,4 @@ public final class VerciLumnSaverView: ScreenSaverView {
 1. Build Target: `VerciLumnSaver.saver`
 2. Destination: `~/Library/Screen Savers/VerciLumnSaver.saver` or `/Library/Screen Savers/`
 3. Activation: Configurable via macOS System Settings > Wallpaper / Screen Saver.
+

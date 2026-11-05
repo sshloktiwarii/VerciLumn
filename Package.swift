@@ -7,7 +7,8 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "VerciLumn", targets: ["VerciLumn"])
+        .executable(name: "VerciLumn", targets: ["VerciLumn"]),
+        .library(name: "VerciLumnSaver", type: .dynamic, targets: ["VerciLumnSaver"])
     ],
     dependencies: [],
     targets: [
@@ -19,9 +20,17 @@ let package = Package(
                 .process("Shaders/FisheyeShader.metal")
             ]
         ),
+        .target(
+            name: "VerciLumnSaver",
+            dependencies: [],
+            path: "Sources/VerciLumnSaver",
+            exclude: [
+                "Info.plist"
+            ]
+        ),
         .testTarget(
             name: "VerciLumnTests",
-            dependencies: ["VerciLumn"],
+            dependencies: ["VerciLumn", "VerciLumnSaver"],
             path: "Tests/VerciLumnTests"
         )
     ]

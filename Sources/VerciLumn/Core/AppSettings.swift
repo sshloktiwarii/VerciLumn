@@ -64,6 +64,45 @@ public final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(isLowPowerModeEnabled, forKey: Keys.lowPowerModeEnabled) }
     }
     
+    // Tactile Timing HUD Feedback
+    @Published public var isTimingHUDVisible: Bool = false
+    @Published public var timingHUDMessage: String = ""
+    private var timingHUDDismissWorkItem: DispatchWorkItem?
+    
+    public func nudgeTimingOffset(by delta: Double) {
+        let rounded = (round((timingOffset + delta) * 100.0) / 100.0)
+        let clamped = min(max(rounded, -10.0), 10.0)
+        self.timingOffset = clamped
+        
+        let deltaMs = Int(round(delta * 1000.0))
+        let totalMs = Int(round(clamped * 1000.0))
+        let deltaPrefix = deltaMs >= 0 ? "+\(deltaMs)" : "\(deltaMs)"
+        let totalPrefix = totalMs >= 0 ? "+\(totalMs)" : "\(totalMs)"
+        
+        triggerTimingHUD(message: "Sync Offset: \(deltaPrefix)ms (\(totalPrefix)ms total)")
+    }
+    
+    public func resetTimingOffset() {
+        self.timingOffset = 0.0
+        triggerTimingHUD(message: "Sync Offset: Reset to 0ms")
+    }
+    
+    public func triggerTimingHUD(message: String) {
+        timingHUDDismissWorkItem?.cancel()
+        self.timingHUDMessage = message
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            self.isTimingHUDVisible = true
+        }
+        
+        let item = DispatchWorkItem { [weak self] in
+            withAnimation(.easeOut(duration: 0.25)) {
+                self?.isTimingHUDVisible = false
+            }
+        }
+        self.timingHUDDismissWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: item)
+    }
+    
     public var targetFpsInterval: Double {
         return isLowPowerModeEnabled ? (1.0 / 30.0) : (1.0 / 45.0)
     }

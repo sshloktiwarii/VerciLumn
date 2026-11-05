@@ -42,3 +42,4 @@ VerciLumn uses Sparkle for seamless background updates:
 git add appcast.xml && git commit -m "release: v1.0.1 Sparkle AppCast"
 git push origin main
 ```
+
