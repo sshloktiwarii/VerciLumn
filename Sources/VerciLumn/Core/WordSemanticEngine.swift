@@ -27,7 +27,7 @@ public enum SemanticMood: String, CaseIterable, Identifiable {
     }
 }
 
-public struct SemanticStyle {
+public struct SemanticStyle: Equatable {
     public let mood: SemanticMood
     public let fontDesign: Font.Design
     public let fontWeight: Font.Weight
@@ -39,7 +39,7 @@ public struct SemanticStyle {
     public let shakeIntensity: CGFloat
 }
 
-public enum ParticleBurstType {
+public enum ParticleBurstType: Equatable {
     case embers
     case speedStreaks
     case floatingHearts
@@ -50,7 +50,7 @@ public enum ParticleBurstType {
     case subtleRhythm
 }
 
-public enum BadgeBorderType {
+public enum BadgeBorderType: Equatable {
     case blazingGlow
     case kineticStreak
     case softPill

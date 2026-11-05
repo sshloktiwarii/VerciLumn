@@ -5,23 +5,38 @@ public struct SemanticWordView: View {
     let fontSize: CGFloat
     let accentColor: Color
     let beatIntensity: Float
+    let cachedStyle: SemanticStyle?
+    let cachedIcon: String?
     var onTap: (() -> Void)? = nil
     
     @ObservedObject var semanticEngine = WordSemanticEngine.shared
+    @ObservedObject var playback = PlaybackManager.shared
     @State private var phase: CGFloat = 0
     @State private var shakeOffset: CGFloat = 0
     @State private var isHovered: Bool = false
     
-    public init(word: String, fontSize: CGFloat, accentColor: Color, beatIntensity: Float = 0.0, onTap: (() -> Void)? = nil) {
+    public init(
+        word: String,
+        fontSize: CGFloat,
+        accentColor: Color,
+        beatIntensity: Float = 0.0,
+        cachedStyle: SemanticStyle? = nil,
+        cachedIcon: String? = nil,
+        onTap: (() -> Void)? = nil
+    ) {
         self.word = word
         self.fontSize = fontSize
         self.accentColor = accentColor
         self.beatIntensity = beatIntensity
+        self.cachedStyle = cachedStyle
+        self.cachedIcon = cachedIcon
         self.onTap = onTap
     }
     
     public var body: some View {
-        let style = semanticEngine.evaluate(word: word)
+        // Zero live NLP: read directly from parse-time cache if available
+        let style = cachedStyle ?? semanticEngine.evaluate(word: word)
+        let icon = cachedIcon ?? WordIconMapper.shared.symbol(for: word)
         
         ZStack {
             // 1. Localized Micro-Particle Bursts & Auras
@@ -31,7 +46,7 @@ public struct SemanticWordView: View {
             
             // 2. Active Word Text with bespoke Badge & Typography
             HStack(spacing: fontSize * 0.15) {
-                if let icon = WordIconMapper.shared.symbol(for: word) {
+                if let icon = icon {
                     Image(systemName: icon)
                         .font(.system(size: fontSize * 0.65, weight: style.fontWeight))
                         .foregroundStyle(
@@ -198,7 +213,7 @@ public struct SemanticWordView: View {
     
     @ViewBuilder
     private func particleLayer(for type: ParticleBurstType) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 45.0, paused: false)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !playback.currentTrack.isPlaying)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let count = Int(8 * semanticEngine.intensity)

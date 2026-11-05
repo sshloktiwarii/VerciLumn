@@ -6,11 +6,21 @@ public struct WordToken: Identifiable, Equatable {
     public let text: String
     public let timestamp: TimeInterval
     public let duration: TimeInterval
+    public let semanticStyle: SemanticStyle
+    public let iconSymbol: String?
     
-    public init(text: String, timestamp: TimeInterval, duration: TimeInterval = 0.4) {
+    public init(
+        text: String,
+        timestamp: TimeInterval,
+        duration: TimeInterval = 0.4,
+        semanticStyle: SemanticStyle? = nil,
+        iconSymbol: String? = nil
+    ) {
         self.text = text
         self.timestamp = timestamp
         self.duration = duration
+        self.semanticStyle = semanticStyle ?? WordSemanticEngine.shared.evaluate(word: text)
+        self.iconSymbol = iconSymbol ?? WordIconMapper.shared.symbol(for: text)
     }
 }
 

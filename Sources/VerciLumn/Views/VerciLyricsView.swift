@@ -107,9 +107,10 @@ public struct VerciLyricsView: View {
         
         return AnyView(
             ZStack {
-                // Liquid Audio Waveform Ring Pulsing in the background
-                LiquidWaveformRingView(size: min(320 * textScale, 400))
-                    .opacity(0.25)
+                // Lightweight ambient ring with zero GPU canvas churn
+                Circle()
+                    .stroke(activeColor.opacity(0.15), lineWidth: 1.5)
+                    .frame(width: min(320 * textScale, 400), height: min(320 * textScale, 400))
                     .allowsHitTesting(false)
                 
                 VStack(spacing: 16 * textScale) {
@@ -167,6 +168,8 @@ public struct VerciLyricsView: View {
                                             fontSize: activeFontSize,
                                             accentColor: activeColor,
                                             beatIntensity: audio.beatIntensity,
+                                            cachedStyle: word.semanticStyle,
+                                            cachedIcon: word.iconSymbol,
                                             onTap: {
                                                 if settings.isInteractiveSeekEnabled {
                                                     playback.seekTo(seconds: word.timestamp)
