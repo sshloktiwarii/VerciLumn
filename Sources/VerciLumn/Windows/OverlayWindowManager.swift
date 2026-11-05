@@ -11,6 +11,7 @@ public final class OverlayWindowManager: ObservableObject {
     
     @Published public private(set) var currentMode: WindowDisplayMode = .desktop
     @Published public private(set) var isScreenLocked: Bool = false
+    @Published public private(set) var isImmersiveMode: Bool = false
     
     private init() {
         // Observe AppSettings for Notch HUD toggle
@@ -24,6 +25,13 @@ public final class OverlayWindowManager: ObservableObject {
         AppSettings.shared.$backdropMode
             .sink { [weak self] mode in
                 self?.updateClickThroughBehavior(for: mode)
+            }
+            .store(in: &cancellables)
+            
+        // Observe Immersive Mode (auto-hide Menu Bar and Dock without macOS Space slide)
+        AppSettings.shared.$isImmersiveModeEnabled
+            .sink { [weak self] enabled in
+                self?.setImmersiveMode(enabled)
             }
             .store(in: &cancellables)
     }
@@ -55,6 +63,10 @@ public final class OverlayWindowManager: ObservableObject {
         }
         
         setupNotchPanel()
+        
+        if AppSettings.shared.isImmersiveModeEnabled {
+            setImmersiveMode(true)
+        }
     }
     
     public func setupNotchPanel() {
@@ -78,9 +90,42 @@ public final class OverlayWindowManager: ObservableObject {
     
     public func updateScreenLayout() {
         for panel in panels {
+            panel.expandToScreenBounds()
             panel.updateWindowLevel()
         }
         notchPanel?.updatePosition()
+        
+        if isImmersiveMode {
+            NSApp.presentationOptions = [.autoHideMenuBar, .autoHideDock]
+        }
+    }
+    
+    /// Borderless Full-Screen Immersion on the current Space:
+    /// Auto-hides Menu Bar and Dock via NSApp.presentationOptions and expands panel to exact screen bounds.
+    public func setImmersiveMode(_ enabled: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isImmersiveMode = enabled
+            
+            if enabled {
+                NSApp.presentationOptions = [.autoHideMenuBar, .autoHideDock]
+                NSApp.activate(ignoringOtherApps: true)
+            } else {
+                NSApp.presentationOptions = []
+            }
+            
+            for panel in self.panels {
+                panel.expandToScreenBounds()
+                panel.updateWindowLevel()
+                if enabled {
+                    panel.makeKeyAndOrderFront(nil)
+                }
+            }
+        }
+    }
+    
+    public func toggleImmersiveMode() {
+        AppSettings.shared.isImmersiveModeEnabled.toggle()
     }
     
     public func setDisplayMode(_ mode: WindowDisplayMode) {

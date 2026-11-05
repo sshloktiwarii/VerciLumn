@@ -59,8 +59,10 @@ public final class InteractivePassThroughHostingView<Content: View>: NSHostingVi
 /// Replaces legacy LockScreenPanel hacks (no CGShieldingWindowLevel manipulation).
 public final class StageOverlayPanel: NSPanel {
     public private(set) var displayMode: WindowDisplayMode = .desktop
+    public private(set) weak var targetScreen: NSScreen?
     
     public init(contentView: NSView, screen: NSScreen = NSScreen.main ?? NSScreen.screens.first ?? NSScreen()) {
+        self.targetScreen = screen
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -84,6 +86,7 @@ public final class StageOverlayPanel: NSPanel {
         self.canHide = false
         self.contentView = contentView
         
+        expandToScreenBounds()
         updateWindowLevel()
     }
     
@@ -98,9 +101,25 @@ public final class StageOverlayPanel: NSPanel {
         }
     }
     
+    /// Expands the panel to the absolute physical display bounds, ignoring safe areas (camera notch / dock / menu bar)
+    public func expandToScreenBounds() {
+        let screenToUse = targetScreen ?? NSScreen.main ?? NSScreen.screens.first
+        guard let target = screenToUse else { return }
+        let fullFrame = target.frame
+        self.setFrame(fullFrame, display: true)
+        self.contentView?.frame = NSRect(origin: .zero, size: fullFrame.size)
+    }
+    
     public func updateWindowLevel() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            
+            if AppSettings.shared.isImmersiveModeEnabled {
+                // In borderless Immersive Mode, elevate to full stage above normal windows without native macOS space switch
+                self.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) - 1)
+                self.orderFrontRegardless()
+                return
+            }
             
             switch self.displayMode {
             case .fullStage:
@@ -118,11 +137,11 @@ public final class StageOverlayPanel: NSPanel {
     }
     
     public override var canBecomeKey: Bool {
-        return false
+        return AppSettings.shared.isImmersiveModeEnabled
     }
     
     public override var canBecomeMain: Bool {
-        return false
+        return AppSettings.shared.isImmersiveModeEnabled
     }
 }
 

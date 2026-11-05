@@ -95,6 +95,14 @@ public final class HotKeyManager: ObservableObject {
             return true
         }
         
+        // 2b. Command + Shift + I -> Toggle Borderless Immersive Mode (No Space switch)
+        if flags == [.command, .shift] && keyChar == "i" {
+            DispatchQueue.main.async {
+                AppSettings.shared.isImmersiveModeEnabled.toggle()
+            }
+            return true
+        }
+        
         // 3. Command + Option + RightArrow -> Cycle Lyric Themes
         if flags == [.command, .option] && event.keyCode == 124 { // 124 = Right Arrow
             DispatchQueue.main.async {

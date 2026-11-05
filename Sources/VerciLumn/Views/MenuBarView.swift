@@ -113,6 +113,15 @@ public struct MenuBarView: View {
                             description: "Translates synced lyrics asynchronously via local Ollama or Google Translate.",
                             isOn: $settings.isTranslationEnabled
                         )
+                        
+                        // Feature H: Borderless Immersive Mode
+                        featureRow(
+                            icon: "arrow.up.left.and.arrow.down.right.square",
+                            title: "Borderless Immersive Mode",
+                            shortcut: "⌘⇧I",
+                            description: "Auto-hides Dock & Menu Bar on current desktop without macOS Space slide.",
+                            isOn: $settings.isImmersiveModeEnabled
+                        )
                     }
                     .padding(.top, 6)
                 } label: {

@@ -207,6 +207,16 @@ public struct CommandPaletteView: View {
                 }
             ),
             CommandItem(
+                title: settings.isImmersiveModeEnabled ? "Exit Borderless Immersive Mode" : "Enter Borderless Immersive Mode",
+                subtitle: "Auto-hide Dock & Menu Bar without macOS Space sliding animation",
+                icon: "arrow.up.left.and.arrow.down.right.square",
+                category: .stage,
+                shortcut: "⌘⇧I",
+                action: {
+                    settings.isImmersiveModeEnabled.toggle()
+                }
+            ),
+            CommandItem(
                 title: "Toggle Dynamic Camera Notch Capsule",
                 subtitle: "Show/hide active singing word and spectrum at screen notch",
                 icon: "inset.filled.topthird.rectangle",

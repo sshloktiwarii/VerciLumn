@@ -645,4 +645,51 @@ final class VerciLumnTests: XCTestCase {
         
         wait(for: [expectation], timeout: 8.0)
     }
+    
+    func testImmersiveModePresentationOptionsAndScreenExpansion() {
+        let settings = AppSettings.shared
+        let windowManager = OverlayWindowManager.shared
+        
+        let screen = NSScreen.main ?? NSScreen.screens.first ?? NSScreen()
+        let testPanel = StageOverlayPanel(contentView: NSView(), screen: screen)
+        
+        // Initial state
+        settings.isImmersiveModeEnabled = false
+        XCTAssertFalse(testPanel.canBecomeKey)
+        XCTAssertFalse(testPanel.canBecomeMain)
+        
+        // Activate Immersive Mode
+        settings.isImmersiveModeEnabled = true
+        
+        let expEnable = expectation(description: "Enable Immersive Mode")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            XCTAssertTrue(windowManager.isImmersiveMode)
+            XCTAssertTrue(NSApp.presentationOptions.contains(.autoHideMenuBar))
+            XCTAssertTrue(NSApp.presentationOptions.contains(.autoHideDock))
+            XCTAssertTrue(testPanel.canBecomeKey)
+            XCTAssertTrue(testPanel.canBecomeMain)
+            
+            // Expand frame check: matches full physical screen bounds, ignoring safe areas
+            testPanel.expandToScreenBounds()
+            XCTAssertEqual(testPanel.frame.size.width, screen.frame.size.width, accuracy: 1.0)
+            XCTAssertEqual(testPanel.frame.size.height, screen.frame.size.height, accuracy: 1.0)
+            
+            expEnable.fulfill()
+        }
+        wait(for: [expEnable], timeout: 2.0)
+        
+        // Deactivate Immersive Mode
+        settings.isImmersiveModeEnabled = false
+        
+        let expDisable = expectation(description: "Disable Immersive Mode")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            XCTAssertFalse(windowManager.isImmersiveMode)
+            XCTAssertFalse(NSApp.presentationOptions.contains(.autoHideMenuBar))
+            XCTAssertFalse(NSApp.presentationOptions.contains(.autoHideDock))
+            XCTAssertFalse(testPanel.canBecomeKey)
+            XCTAssertFalse(testPanel.canBecomeMain)
+            expDisable.fulfill()
+        }
+        wait(for: [expDisable], timeout: 2.0)
+    }
 }

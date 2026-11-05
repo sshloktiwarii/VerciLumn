@@ -27,6 +27,7 @@ public final class AppSettings: ObservableObject {
         static let lowPowerModeEnabled = "vercilumn_low_power_mode_enabled"
         static let translationEnabled = "vercilumn_translation_enabled"
         static let translationLanguage = "vercilumn_translation_language"
+        static let immersiveModeEnabled = "vercilumn_immersive_mode_enabled"
     }
     
     // Published Properties
@@ -98,6 +99,13 @@ public final class AppSettings: ObservableObject {
     
     @Published public var translationLanguage: String {
         didSet { UserDefaults.standard.set(translationLanguage, forKey: Keys.translationLanguage) }
+    }
+    
+    @Published public var isImmersiveModeEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isImmersiveModeEnabled, forKey: Keys.immersiveModeEnabled)
+            OverlayWindowManager.shared.setImmersiveMode(isImmersiveModeEnabled)
+        }
     }
     
     // Tactile Timing HUD Feedback
@@ -180,6 +188,8 @@ public final class AppSettings: ObservableObject {
         
         self.isTranslationEnabled = defaults.object(forKey: Keys.translationEnabled) != nil ? defaults.bool(forKey: Keys.translationEnabled) : true
         self.translationLanguage = defaults.string(forKey: Keys.translationLanguage) ?? "en"
+        
+        self.isImmersiveModeEnabled = defaults.bool(forKey: Keys.immersiveModeEnabled)
         
         if self.isBezelEnabled && self.bezelSourceMode == .screenSampling {
             ScreenSampler.shared.start()
