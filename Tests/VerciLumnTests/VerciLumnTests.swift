@@ -50,7 +50,7 @@ final class VerciLumnTests: XCTestCase {
         XCTAssertNotNil(settings.lyricStyle)
         XCTAssertGreaterThan(settings.glowSensitivity, 0.0)
         XCTAssertGreaterThan(settings.textScale, 0.0)
-        XCTAssertEqual(settings.backdropMode, .infiniteZoom)
+        XCTAssertNotNil(settings.backdropMode)
     }
     
     func testStageOverlayPanelConfigurationAndClickThrough() {

@@ -29,6 +29,9 @@ public final class DynamicNotchPanel: NSPanel {
         
         let hostingView = NSHostingView(rootView: DynamicNotchHUDView())
         hostingView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.layer?.isOpaque = false
         self.contentView = hostingView
     }
     

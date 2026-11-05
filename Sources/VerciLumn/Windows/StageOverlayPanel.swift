@@ -11,6 +11,13 @@ public enum WindowDisplayMode: String, CaseIterable, Identifiable {
 
 /// Hosting view designed for click pass-through to background macOS apps
 public final class InteractivePassThroughHostingView<Content: View>: NSHostingView<Content> {
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        self.wantsLayer = true
+        self.layer?.backgroundColor = NSColor.clear.cgColor
+        self.layer?.isOpaque = false
+    }
+    
     public override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         return true
     }
@@ -66,6 +73,10 @@ public final class StageOverlayPanel: NSPanel {
         self.backgroundColor = .clear
         self.hasShadow = false
         
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        contentView.layer?.isOpaque = false
+        
         // Strict NSWindow-level click-through enforcement for visual overlays
         self.ignoresMouseEvents = (AppSettings.shared.backdropMode == .transparent)
         self.acceptsMouseMovedEvents = true
@@ -114,3 +125,4 @@ public final class StageOverlayPanel: NSPanel {
         return false
     }
 }
+

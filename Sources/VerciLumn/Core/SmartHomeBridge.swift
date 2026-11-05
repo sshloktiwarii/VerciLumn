@@ -118,3 +118,4 @@ public final class SmartHomeBridge: ObservableObject {
         session.dataTask(with: request).resume()
     }
 }
+

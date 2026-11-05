@@ -47,11 +47,7 @@ public struct DynamicNotchHUDView: View {
                 .padding(.vertical, isHovered ? 12 : 6)
                 .background(
                     RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
-                        .fill(Color.black.opacity(0.85))
-                        .background(
-                            RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        )
+                        .fill(Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.94))
                         .overlay(
                             RoundedRectangle(cornerRadius: hasPhysicalNotch ? (isHovered ? 20 : 14) : 22, style: .continuous)
                                 .stroke(

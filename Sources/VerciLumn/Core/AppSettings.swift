@@ -83,7 +83,7 @@ public final class AppSettings: ObservableObject {
         self.displayMode = WindowDisplayMode(rawValue: savedModeRaw) ?? .fullStage
         
         let savedBackdropRaw = defaults.string(forKey: Keys.backdropMode) ?? ""
-        self.backdropMode = BackdropMode(rawValue: savedBackdropRaw) ?? .infiniteZoom
+        self.backdropMode = BackdropMode(rawValue: savedBackdropRaw) ?? .transparent
         
         self.timingOffset = defaults.double(forKey: Keys.timingOffset)
         
