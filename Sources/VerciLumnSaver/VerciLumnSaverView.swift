@@ -4,7 +4,7 @@ import SwiftUI
 
 @objc(VerciLumnSaverView)
 public final class VerciLumnSaverView: ScreenSaverView {
-    private let stateModel = ScreenSaverStateModel()
+    private var stateModel: ScreenSaverStateModel?
     private var hostingView: NSHostingView<VerciLumnSaverContentView>?
     
     public override init?(frame: NSRect, isPreview: Bool) {
@@ -23,7 +23,9 @@ public final class VerciLumnSaverView: ScreenSaverView {
         self.wantsLayer = true
         self.layer?.backgroundColor = NSColor.black.cgColor
         
-        let contentView = VerciLumnSaverContentView(model: stateModel, isPreview: isPreview)
+        let model = ScreenSaverStateModel(isPreview: isPreview)
+        self.stateModel = model
+        let contentView = VerciLumnSaverContentView(model: model, isPreview: isPreview)
         let hosting = NSHostingView(rootView: contentView)
         hosting.frame = self.bounds
         hosting.autoresizingMask = [.width, .height]
@@ -38,7 +40,7 @@ public final class VerciLumnSaverView: ScreenSaverView {
     }
     
     public override func animateOneFrame() {
-        stateModel.stepFrame()
+        stateModel?.stepFrame()
     }
     
     public override func resizeSubviews(withOldSize oldSize: NSSize) {

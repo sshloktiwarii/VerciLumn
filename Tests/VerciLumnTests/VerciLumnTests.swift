@@ -349,6 +349,12 @@ final class VerciLumnTests: XCTestCase {
         XCTAssertTrue(bezel.isEnabled)
         XCTAssertEqual(bezel.glowIntensityMultiplier, 1.2)
         
+        // Negative & NaN multiplier resilience
+        let negBezel = BezelGlowView(isEnabled: true, glowIntensityMultiplier: -5.0)
+        XCTAssertEqual(negBezel.glowIntensityMultiplier, -5.0)
+        let nanBezel = BezelGlowView(isEnabled: true, glowIntensityMultiplier: Double.nan)
+        XCTAssertTrue(nanBezel.glowIntensityMultiplier.isNaN)
+        
         // Feed sample buffer to verify hardware vector FFT execution
         let samples = [Float](repeating: 0.25, count: 1024)
         spectrum.processAudio(samples: samples)
@@ -386,12 +392,41 @@ final class VerciLumnTests: XCTestCase {
         XCTAssertEqual(settings.timingOffset, 0.10, accuracy: 0.001)
         PlaybackManager.shared.resetTimingOffset()
         
-        // CommandPalettePanel tests
+        // Boundary Clamping Stress: Nudge beyond +10.0s clamp limit
+        for _ in 0..<150 {
+            settings.nudgeTimingOffset(by: 0.10)
+        }
+        XCTAssertEqual(settings.timingOffset, 10.0, accuracy: 0.001, "Offset must clamp at +10.0s")
+        
+        // Boundary Clamping Stress: Nudge beyond -10.0s clamp limit
+        for _ in 0..<250 {
+            settings.nudgeTimingOffset(by: -0.10)
+        }
+        XCTAssertEqual(settings.timingOffset, -10.0, accuracy: 0.001, "Offset must clamp at -10.0s")
+        
+        // Resilience: NaN & Infinity delta should be safely rejected
+        let savedOffset = settings.timingOffset
+        settings.nudgeTimingOffset(by: Double.nan)
+        XCTAssertEqual(settings.timingOffset, savedOffset)
+        settings.nudgeTimingOffset(by: Double.infinity)
+        XCTAssertEqual(settings.timingOffset, savedOffset)
+        settings.resetTimingOffset()
+        
+        // CommandPalettePanel lifecycle & properties
         let panel = CommandPalettePanel.shared
         XCTAssertTrue(panel.canBecomeKey)
         XCTAssertTrue(panel.canBecomeMain)
         XCTAssertFalse(panel.isOpaque)
         XCTAssertEqual(panel.level, .floating)
+        
+        panel.show()
+        XCTAssertTrue(panel.isVisible)
+        panel.hide()
+        XCTAssertFalse(panel.isVisible)
+        panel.toggle()
+        XCTAssertTrue(panel.isVisible)
+        panel.toggle()
+        XCTAssertFalse(panel.isVisible)
     }
     
     // MARK: - Choice 3: Native macOS Screen Saver Bundle Tests
@@ -430,5 +465,31 @@ final class VerciLumnTests: XCTestCase {
         XCTAssertEqual(readState.beatIntensity, 0.85, accuracy: 0.01)
         XCTAssertEqual(readState.bands.count, 8)
         XCTAssertEqual(readState.bands[0], 0.9, accuracy: 0.01)
+        
+        // Test live throttled audio energy sync
+        ScreenSaverSharedState.syncAudioEnergy(
+            beatIntensity: 0.92,
+            bands: [0.95, 0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.25]
+        )
+        let updatedState = ScreenSaverSharedState.read()
+        XCTAssertEqual(updatedState.beatIntensity, 0.92, accuracy: 0.01)
+        XCTAssertEqual(updatedState.bands[0], 0.95, accuracy: 0.01)
+        
+        // Test Thermal Invariant: Idle screensaver drops energy to 0.0
+        let idleModel = ScreenSaverStateModel(isPreview: false)
+        ScreenSaverSharedState.sync(
+            isPlaying: false,
+            title: "",
+            artist: "",
+            album: "",
+            beatIntensity: 0.0,
+            bands: Array(repeating: 0.0, count: 8)
+        )
+        idleModel.stepFrame()
+        XCTAssertFalse(idleModel.isPlaying)
+        XCTAssertEqual(idleModel.beatIntensity, 0.0, accuracy: 0.001)
+        let initialPhase = idleModel.phase
+        idleModel.stepFrame()
+        XCTAssertEqual(idleModel.phase, initialPhase, "Phase must freeze during idle screensaver to guarantee 0% GPU")
     }
 }

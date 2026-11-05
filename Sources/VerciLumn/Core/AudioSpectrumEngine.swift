@@ -1,6 +1,7 @@
 import Foundation
 import Accelerate
 import Combine
+import QuartzCore
 
 public final class AudioSpectrumEngine: ObservableObject, @unchecked Sendable {
     public static let shared = AudioSpectrumEngine()
@@ -15,6 +16,7 @@ public final class AudioSpectrumEngine: ObservableObject, @unchecked Sendable {
     private var simulatedTimer: AnyCancellable?
     private var smoothBands: [Float] = Array(repeating: 0.05, count: 8)
     private var phase: Float = 0.0
+    private var lastSaverSyncTime: TimeInterval = 0
     
     // Pre-allocated Hardware Vector Processing Scratch Buffers (Zero heap reallocations during live playback)
     private var hannWindow: [Float]
@@ -130,6 +132,15 @@ public final class AudioSpectrumEngine: ObservableObject, @unchecked Sendable {
             guard let self = self else { return }
             self.bands = self.smoothBands
             self.overallEnergy = energy
+            
+            let now = CACurrentMediaTime()
+            if now - self.lastSaverSyncTime >= 0.08 {
+                self.lastSaverSyncTime = now
+                ScreenSaverSharedState.syncAudioEnergy(
+                    beatIntensity: AudioBeatEngine.shared.beatIntensity,
+                    bands: self.smoothBands
+                )
+            }
         }
     }
     

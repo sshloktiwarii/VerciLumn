@@ -113,9 +113,16 @@ public final class HotKeyManager: ObservableObject {
             return true
         }
         
+        // When Command Palette is visible and local, delegate key handling to it
+        if isLocal && CommandPalettePanel.shared.isVisible {
+            return false
+        }
+        
+        let isEditingText = isLocal && (event.window?.firstResponder is NSText || event.window?.firstResponder is NSTextView)
+        
         // 5. Command + [ or (local) [ -> Instant Lyric Sync Offset Nudge -100ms
         if (flags == .command && event.charactersIgnoringModifiers == "[") ||
-           (isLocal && flags.isEmpty && event.charactersIgnoringModifiers == "[") {
+           (isLocal && flags.isEmpty && !isEditingText && event.charactersIgnoringModifiers == "[") {
             DispatchQueue.main.async {
                 AppSettings.shared.nudgeTimingOffset(by: -0.10)
             }
@@ -124,7 +131,7 @@ public final class HotKeyManager: ObservableObject {
         
         // 6. Command + ] or (local) ] -> Instant Lyric Sync Offset Nudge +100ms
         if (flags == .command && event.charactersIgnoringModifiers == "]") ||
-           (isLocal && flags.isEmpty && event.charactersIgnoringModifiers == "]") {
+           (isLocal && flags.isEmpty && !isEditingText && event.charactersIgnoringModifiers == "]") {
             DispatchQueue.main.async {
                 AppSettings.shared.nudgeTimingOffset(by: 0.10)
             }

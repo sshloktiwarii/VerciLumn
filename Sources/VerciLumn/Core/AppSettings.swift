@@ -70,6 +70,7 @@ public final class AppSettings: ObservableObject {
     private var timingHUDDismissWorkItem: DispatchWorkItem?
     
     public func nudgeTimingOffset(by delta: Double) {
+        guard !delta.isNaN && !delta.isInfinite else { return }
         let rounded = (round((timingOffset + delta) * 100.0) / 100.0)
         let clamped = min(max(rounded, -10.0), 10.0)
         self.timingOffset = clamped

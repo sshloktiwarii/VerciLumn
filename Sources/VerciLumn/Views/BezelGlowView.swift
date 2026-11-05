@@ -20,27 +20,28 @@ public struct BezelGlowView: View {
             if isEnabled && playback.currentTrack.isPlaying {
                 let palette = theme.activePalette
                 let bands = spectrum.bands
+                let mult = (glowIntensityMultiplier.isNaN || glowIntensityMultiplier.isInfinite) ? 1.0 : max(0.0, glowIntensityMultiplier)
                 
                 // Discrete multi-zone frequency mapping from hardware vDSP FFT:
                 // 1. Sub-bass & Bass (Bands 0 & 1) -> Bottom Edge
                 let b0 = bands.indices.contains(0) ? CGFloat(bands[0]) : 0.05
                 let b1 = bands.indices.contains(1) ? CGFloat(bands[1]) : 0.05
-                let bottomPulse = min(1.0, (b0 * 0.75 + b1 * 0.25) * glowIntensityMultiplier)
+                let bottomPulse = min(1.0, max(0.0, (b0 * 0.75 + b1 * 0.25) * mult))
                 
                 // 2. Low-Mid & Mid Vocals (Bands 2 & 3) -> Left Edge
                 let b2 = bands.indices.contains(2) ? CGFloat(bands[2]) : 0.05
                 let b3 = bands.indices.contains(3) ? CGFloat(bands[3]) : 0.05
-                let leftPulse = min(1.0, (b2 * 0.5 + b3 * 0.5) * glowIntensityMultiplier)
+                let leftPulse = min(1.0, max(0.0, (b2 * 0.5 + b3 * 0.5) * mult))
                 
                 // 3. High-Mid & Presence Percussion (Bands 4 & 5) -> Right Edge
                 let b4 = bands.indices.contains(4) ? CGFloat(bands[4]) : 0.05
                 let b5 = bands.indices.contains(5) ? CGFloat(bands[5]) : 0.05
-                let rightPulse = min(1.0, (b4 * 0.5 + b5 * 0.5) * glowIntensityMultiplier)
+                let rightPulse = min(1.0, max(0.0, (b4 * 0.5 + b5 * 0.5) * mult))
                 
                 // 4. Brilliance & Air Treble (Bands 6 & 7) -> Top Edge
                 let b6 = bands.indices.contains(6) ? CGFloat(bands[6]) : 0.05
                 let b7 = bands.indices.contains(7) ? CGFloat(bands[7]) : 0.05
-                let topPulse = min(1.0, (b6 * 0.5 + b7 * 0.5) * glowIntensityMultiplier)
+                let topPulse = min(1.0, max(0.0, (b6 * 0.5 + b7 * 0.5) * mult))
                 
                 let maxPulse = max(bottomPulse, max(leftPulse, max(rightPulse, topPulse)))
                 

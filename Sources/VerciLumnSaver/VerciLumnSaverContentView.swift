@@ -6,16 +6,20 @@ public final class ScreenSaverStateModel: ObservableObject {
     @Published public var title: String = ""
     @Published public var artist: String = ""
     @Published public var beatIntensity: Float = 0.0
-    @Published public var bands: [Float] = Array(repeating: 0.05, count: 8)
+    @Published public var bands: [Float] = Array(repeating: 0.0, count: 8)
     @Published public var phase: Double = 0.0
+    public let isPreview: Bool
     
-    public init() {
+    public init(isPreview: Bool = false) {
+        self.isPreview = isPreview
         refreshState()
     }
     
     public func stepFrame() {
-        phase += 0.04
         refreshState()
+        // Thermal invariant: 0% idle GPU when paused unless in preview mode
+        guard isPlaying || isPreview else { return }
+        phase += 0.04
     }
     
     public func refreshState() {
@@ -29,19 +33,38 @@ public final class ScreenSaverStateModel: ObservableObject {
         let parsedBands: [Float]
         if rawBands.count == 8 {
             parsedBands = rawBands.map { Float($0) }
-        } else {
-            // Standalone fallback: harmonic breathing wave
+        } else if playing || isPreview {
+            // Harmonic breathing wave fallback
             let simWave = Float(sin(phase * 1.2) * 0.25 + 0.35)
             parsedBands = (0..<8).map { i in
                 Float(sin(phase * 0.8 + Double(i) * 0.5) * 0.2 + Double(simWave))
             }
+        } else {
+            parsedBands = Array(repeating: 0.0, count: 8)
         }
         
-        self.isPlaying = playing
-        self.title = t
-        self.artist = a
-        self.beatIntensity = playing ? beat : Float(sin(phase * 1.5) * 0.2 + 0.3)
-        self.bands = parsedBands
+        if playing {
+            if self.isPlaying != true { self.isPlaying = true }
+            if self.title != t { self.title = t }
+            if self.artist != a { self.artist = a }
+            self.beatIntensity = beat
+            self.bands = parsedBands
+        } else if isPreview {
+            if self.isPlaying != false { self.isPlaying = false }
+            let previewTitle = t.isEmpty ? "VerciLumn" : t
+            let previewArtist = a.isEmpty ? "Ambient Visualizer" : a
+            if self.title != previewTitle { self.title = previewTitle }
+            if self.artist != previewArtist { self.artist = previewArtist }
+            self.beatIntensity = Float(sin(phase * 1.5) * 0.2 + 0.3)
+            self.bands = parsedBands
+        } else {
+            // Strictly idle: 0% GPU, zero unnecessary state mutations
+            if self.isPlaying != false { self.isPlaying = false }
+            if self.title != "" { self.title = "" }
+            if self.artist != "" { self.artist = "" }
+            if self.beatIntensity != 0.0 { self.beatIntensity = 0.0 }
+            if self.bands != Array(repeating: 0.0, count: 8) { self.bands = Array(repeating: 0.0, count: 8) }
+        }
     }
 }
 

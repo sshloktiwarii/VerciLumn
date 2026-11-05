@@ -121,7 +121,12 @@ public final class PlaybackManager: ObservableObject {
     }()
     
     private init() {
-        startPolling()
+        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+                        ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil ||
+                        NSClassFromString("XCTestCase") != nil
+        if !isTesting {
+            startPolling()
+        }
     }
     
     public func startPolling() {
@@ -168,6 +173,14 @@ public final class PlaybackManager: ObservableObject {
                         sampledAt: CACurrentMediaTime(),
                         artwork: self.currentTrack.artwork,
                         playerSource: self.currentTrack.playerSource
+                    )
+                    ScreenSaverSharedState.sync(
+                        isPlaying: false,
+                        title: self.currentTrack.title,
+                        artist: self.currentTrack.artist,
+                        album: self.currentTrack.album,
+                        beatIntensity: 0.0,
+                        bands: Array(repeating: 0.02, count: 8)
                     )
                 }
             }

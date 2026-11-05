@@ -31,6 +31,16 @@ public struct ScreenSaverSharedState {
         defaults.set(Date().timeIntervalSince1970, forKey: Keys.lastUpdated)
     }
     
+    public static func syncAudioEnergy(
+        beatIntensity: Float,
+        bands: [Float]
+    ) {
+        let defaults = UserDefaults(suiteName: suiteName) ?? UserDefaults.standard
+        defaults.set(Double(beatIntensity), forKey: Keys.beatIntensity)
+        defaults.set(bands.map { Double($0) }, forKey: Keys.spectrumBands)
+        defaults.set(Date().timeIntervalSince1970, forKey: Keys.lastUpdated)
+    }
+    
     public static func read() -> (
         isPlaying: Bool,
         title: String,

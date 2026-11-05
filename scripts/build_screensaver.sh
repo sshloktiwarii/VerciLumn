@@ -11,9 +11,12 @@ echo "==> Building VerciLumnSaver dynamic library target..."
 cd "${ROOT_DIR}"
 swift build -c release --product VerciLumnSaver
 
-# Locate the compiled dylib in SPM build directory
+# Locate the compiled dylib in SPM build directory (prioritizing Release)
 BUILD_DIR="${ROOT_DIR}/.build"
-DYLIB_PATH=$(find "${BUILD_DIR}" -name "libVerciLumnSaver.dylib" | grep -E "release|Debug" | head -n 1)
+DYLIB_PATH=$(find "${BUILD_DIR}" -name "libVerciLumnSaver.dylib" | grep -i "Release" | head -n 1)
+if [[ -z "${DYLIB_PATH}" || ! -f "${DYLIB_PATH}" ]]; then
+    DYLIB_PATH=$(find "${BUILD_DIR}" -name "libVerciLumnSaver.dylib" | head -n 1)
+fi
 
 if [[ -z "${DYLIB_PATH}" || ! -f "${DYLIB_PATH}" ]]; then
     echo "Error: libVerciLumnSaver.dylib not found."
