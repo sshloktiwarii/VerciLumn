@@ -67,10 +67,16 @@ public final class LyricsTranslator {
                 translatedTexts = await self.tryGoogleTranslation(lines: originalTexts, targetLang: targetLanguage)
             }
             
-            let finalTranslations = translatedTexts ?? Array(repeating: "", count: originalTexts.count)
-            self.translationCache.setObject(finalTranslations as NSArray, forKey: cacheKey)
+            guard let validTranslations = translatedTexts, !validTranslations.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+                DispatchQueue.main.async {
+                    completion(lyrics)
+                }
+                return
+            }
             
-            let updatedLines = zip(lyrics.lines, finalTranslations).map { line, trans in
+            self.translationCache.setObject(validTranslations as NSArray, forKey: cacheKey)
+            
+            let updatedLines = zip(lyrics.lines, validTranslations).map { line, trans in
                 LyricLine(
                     id: line.id,
                     timestamp: line.timestamp,
@@ -116,7 +122,7 @@ public final class LyricsTranslator {
         request.httpMethod = "POST"
         request.httpBody = httpBody
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 2.0 // Rapid offline probe
+        request.timeoutInterval = 1.0 // Rapid offline probe
         
         do {
             let (data, response) = try await session.data(for: request)
@@ -135,20 +141,26 @@ public final class LyricsTranslator {
         return nil
     }
     
-    // MARK: - Backend 2: Google Translate API (Lightweight Free Endpoint)
+    // MARK: - Backend 2: Google Translate API (Hardware-Accelerated POST Endpoint)
     
     private func tryGoogleTranslation(lines: [String], targetLang: String) async -> [String]? {
-        // Translate in small batches to respect URL query length limits
-        var results: [String] = []
-        let joinedText = lines.joined(separator: "\n")
+        guard !lines.isEmpty else { return nil }
+        guard let url = URL(string: "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=\(targetLang)&dt=t") else {
+            return nil
+        }
         
-        guard let encoded = joinedText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=\(targetLang)&dt=t&q=\(encoded)") else {
+        let joinedText = lines.joined(separator: "\n")
+        var components = URLComponents()
+        components.queryItems = [URLQueryItem(name: "q", value: joinedText)]
+        guard let postData = components.percentEncodedQuery?.data(using: .utf8) else {
             return nil
         }
         
         var request = URLRequest(url: url)
-        request.timeoutInterval = 3.5
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = postData
+        request.timeoutInterval = 4.5
         
         do {
             let (data, response) = try await session.data(for: request)
@@ -168,7 +180,7 @@ public final class LyricsTranslator {
                 if splitLines.count == lines.count {
                     return splitLines
                 } else if !splitLines.isEmpty {
-                    // Pad or truncate to match original count
+                    var results: [String] = []
                     for idx in 0..<lines.count {
                         if idx < splitLines.count {
                             results.append(splitLines[idx])
@@ -186,3 +198,4 @@ public final class LyricsTranslator {
         return nil
     }
 }
+

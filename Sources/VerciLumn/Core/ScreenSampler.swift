@@ -17,6 +17,7 @@ public final class ScreenSampler: ObservableObject {
     @Published public private(set) var rightColor: Color = Color.clear
     @Published public private(set) var isRunning: Bool = false
     @Published public private(set) var hasScreenCapturePermission: Bool = true
+    @Published public private(set) var hasExtractedLight: Bool = false
     
     // Downscale Resolution: 128x72 yields sub-millisecond GPU sampling with near-zero CPU/memory footprint
     public static let targetWidth = 128
@@ -138,12 +139,19 @@ public final class ScreenSampler: ObservableObject {
         let lColor = Color(red: edges.left.r, green: edges.left.g, blue: edges.left.b)
         let rColor = Color(red: edges.right.r, green: edges.right.g, blue: edges.right.b)
         
+        let avgLuminance = (edges.top.r + edges.top.g + edges.top.b +
+                            edges.bottom.r + edges.bottom.g + edges.bottom.b +
+                            edges.left.r + edges.left.g + edges.left.b +
+                            edges.right.r + edges.right.g + edges.right.b) / 12.0
+        let hasLight = avgLuminance > 0.03
+        
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.topColor = tColor
             self.bottomColor = bColor
             self.leftColor = lColor
             self.rightColor = rColor
+            self.hasExtractedLight = hasLight
         }
     }
     

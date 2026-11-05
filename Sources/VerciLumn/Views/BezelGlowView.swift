@@ -29,7 +29,7 @@ public struct BezelGlowView: View {
                 
                 // Color & Pulse resolution: Either from ScreenSampler or Audio FFT
                 let (bottomColor, leftColor, rightColor, topColor, bottomPulse, leftPulse, rightPulse, topPulse): (Color, Color, Color, Color, CGFloat, CGFloat, CGFloat, CGFloat) = {
-                    if isAmbilight {
+                    if isAmbilight && screenSampler.hasExtractedLight {
                         // Hardware-accelerated Ambilight projection from ScreenSampler
                         let baseIntensity = min(1.0, max(0.2, 0.7 * mult))
                         return (

@@ -207,7 +207,9 @@ public struct VerciLyricsView: View {
                                     .foregroundColor(activeColor)
                                     .shadow(color: activeColor.opacity(0.7), radius: 16)
                                     .lineLimit(2)
+                                    .minimumScaleFactor(0.65)
                                     .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
                             }
                             .buttonStyle(.plain)
                         }
@@ -273,34 +275,54 @@ public struct VerciLyricsView: View {
     
     // MARK: - Style 3: Neon Horizon (3D Perspective)
     private func neonHorizonView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
-        let baseFontSize = 46.0 * textScale
+        let baseFontSize = min(46.0 * textScale, 56.0)
         let activeColor = theme.activePalette.highlightAccent
         
-        return VStack(spacing: 28 * textScale) {
+        return VStack(spacing: 20 * textScale) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 3), id: \.self) { idx in
                 let line = lines[idx]
                 let distance = idx - activeIndex
                 let isActive = distance == 0
                 let isHovered = hoveredLineIdx == idx
+                let isDuplicateChorus = (idx > activeIndex && idx > 0 && lines[idx - 1].fullText == line.fullText)
                 
-                Button {
-                    if settings.isInteractiveSeekEnabled {
-                        playback.seekTo(seconds: line.timestamp)
+                VStack(spacing: 6 * textScale) {
+                    Button {
+                        if settings.isInteractiveSeekEnabled {
+                            playback.seekTo(seconds: line.timestamp)
+                        }
+                    } label: {
+                        Text(line.fullText)
+                            .font(.system(size: isActive ? baseFontSize : baseFontSize * 0.72, weight: isActive ? .black : .bold, design: theme.currentTypography.design))
+                            .foregroundColor(isActive ? activeColor : (isHovered ? .white.opacity(0.65) : .white.opacity(isDuplicateChorus ? 0.12 : 0.28)))
+                            .shadow(color: isActive ? activeColor.opacity(0.7) : (isHovered ? activeColor.opacity(0.3) : .clear), radius: 20 * textScale)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.65)
+                            .padding(.horizontal, 36)
+                            .rotation3DEffect(
+                                .degrees(Double(distance) * -14),
+                                axis: (x: 1.0, y: 0.0, z: 0.0),
+                                anchor: .center,
+                                perspective: 0.5
+                            )
+                            .opacity(max(0.12, 1.0 - (abs(Double(distance)) * 0.25)))
                     }
-                } label: {
-                    Text(line.fullText)
-                        .font(.system(size: baseFontSize, weight: isActive ? .black : .bold, design: theme.currentTypography.design))
-                        .foregroundColor(isActive ? activeColor : (isHovered ? .white.opacity(0.65) : .white.opacity(0.25)))
-                        .shadow(color: isActive ? activeColor.opacity(0.7) : (isHovered ? activeColor.opacity(0.3) : .clear), radius: 20 * textScale)
-                        .rotation3DEffect(
-                            .degrees(Double(distance) * -16),
-                            axis: (x: 1.0, y: 0.0, z: 0.0),
-                            anchor: .center,
-                            perspective: 0.5
-                        )
-                        .opacity(max(0.12, 1.0 - (abs(Double(distance)) * 0.28)))
+                    .buttonStyle(.plain)
+                    
+                    // Live Translated Lyric Subtitle
+                    if isActive && settings.isTranslationEnabled, let translation = line.translation, !translation.isEmpty {
+                        Text(translation)
+                            .font(.system(size: min(18.0 * textScale, 22.0), weight: .medium, design: theme.currentTypography.design))
+                            .foregroundColor(.white.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .padding(.horizontal, 36)
+                            .padding(.top, 4 * textScale)
+                            .transition(.opacity)
+                    }
                 }
-                .buttonStyle(.plain)
                 .onHover { hovering in
                     hoveredLineIdx = hovering ? idx : nil
                 }
@@ -359,29 +381,46 @@ public struct VerciLyricsView: View {
     
     // MARK: - Style 5: Cinematic Crossfade Stack
     private func cinematicStackView(lines: [LyricLine], activeIndex: Int, currentTime: TimeInterval) -> some View {
-        let baseFontSize = 48.0 * textScale
+        let baseFontSize = min(48.0 * textScale, 56.0)
         let activeColor = theme.activePalette.highlightAccent
         
-        return VStack(spacing: 28 * textScale) {
+        return VStack(spacing: 22 * textScale) {
             ForEach(max(0, activeIndex - 2)...min(lines.count - 1, activeIndex + 2), id: \.self) { idx in
                 let line = lines[idx]
                 let isActive = idx == activeIndex
                 let isHovered = hoveredLineIdx == idx
+                let isDuplicateChorus = (idx > activeIndex && idx > 0 && lines[idx - 1].fullText == line.fullText)
                 
-                Button {
-                    if settings.isInteractiveSeekEnabled {
-                        playback.seekTo(seconds: line.timestamp)
+                VStack(spacing: 6 * textScale) {
+                    Button {
+                        if settings.isInteractiveSeekEnabled {
+                            playback.seekTo(seconds: line.timestamp)
+                        }
+                    } label: {
+                        Text(line.fullText)
+                            .font(.system(size: isActive ? baseFontSize : baseFontSize * 0.65, weight: isActive ? .heavy : .semibold, design: theme.currentTypography.design))
+                            .foregroundColor(isActive ? activeColor : (isHovered ? .white.opacity(0.65) : .white.opacity(isDuplicateChorus ? 0.12 : 0.28)))
+                            .shadow(color: isActive ? activeColor.opacity(0.6) : (isHovered ? activeColor.opacity(0.3) : .clear), radius: 16)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.65)
+                            .padding(.horizontal, 36)
                     }
-                } label: {
-                    Text(line.fullText)
-                        .font(.system(size: isActive ? baseFontSize : baseFontSize * 0.65, weight: isActive ? .heavy : .semibold, design: theme.currentTypography.design))
-                        .foregroundColor(isActive ? .white : (isHovered ? .white.opacity(0.65) : .white.opacity(0.28)))
-                        .shadow(color: isActive ? activeColor.opacity(0.5) : (isHovered ? activeColor.opacity(0.3) : .clear), radius: 16)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .padding(.horizontal, 24)
+                    .buttonStyle(.plain)
+                    
+                    // Live Translated Lyric Subtitle
+                    if isActive && settings.isTranslationEnabled, let translation = line.translation, !translation.isEmpty {
+                        Text(translation)
+                            .font(.system(size: min(18.0 * textScale, 22.0), weight: .medium, design: theme.currentTypography.design))
+                            .foregroundColor(.white.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .padding(.horizontal, 36)
+                            .padding(.top, 2 * textScale)
+                            .transition(.opacity)
+                    }
                 }
-                .buttonStyle(.plain)
                 .onHover { hovering in
                     hoveredLineIdx = hovering ? idx : nil
                 }
