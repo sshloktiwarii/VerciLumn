@@ -5,7 +5,7 @@ import Combine
 public final class OverlayWindowManager: ObservableObject {
     public static let shared = OverlayWindowManager()
     
-    private var panels: [LockScreenPanel] = []
+    private var panels: [StageOverlayPanel] = []
     private var notchPanel: DynamicNotchPanel?
     private var cancellables = Set<AnyCancellable>()
     
@@ -19,11 +19,25 @@ public final class OverlayWindowManager: ObservableObject {
                 self?.setNotchHUDVisible(enabled)
             }
             .store(in: &cancellables)
+            
+        // Observe Backdrop changes to enforce NSWindow level click-through
+        AppSettings.shared.$backdropMode
+            .sink { [weak self] mode in
+                self?.updateClickThroughBehavior(for: mode)
+            }
+            .store(in: &cancellables)
     }
     
     public func setScreenLocked(_ locked: Bool) {
         DispatchQueue.main.async { [weak self] in
             self?.isScreenLocked = locked
+        }
+    }
+    
+    public func updateClickThroughBehavior(for mode: BackdropMode) {
+        let isPassThrough = (mode == .transparent)
+        for panel in panels {
+            panel.setIgnoresMouseEventsStrict(isPassThrough)
         }
     }
     
@@ -35,7 +49,7 @@ public final class OverlayWindowManager: ObservableObject {
         for screen in screens {
             let hostingView = InteractivePassThroughHostingView(rootView: rootView)
             hostingView.frame = screen.frame
-            let panel = LockScreenPanel(contentView: hostingView, screen: screen)
+            let panel = StageOverlayPanel(contentView: hostingView, screen: screen)
             panel.setDisplayMode(mode)
             panels.append(panel)
         }

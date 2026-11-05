@@ -309,11 +309,10 @@ public struct MenuBarView: View {
             // Dropdown 1: Window Layer Mode
             dropdownPicker(
                 label: "DISPLAY PRESENTATION",
-                sublabel: "Screen elevation, lock screen activation, and desktop layering",
+                sublabel: "Screen elevation, desktop wallpaper pass-through, and floating layer",
                 selection: $settings.displayMode
             ) {
                 Text("Full Screen Stage").tag(WindowDisplayMode.fullStage)
-                Text("Lock Screen Only (Hidden when unlocked)").tag(WindowDisplayMode.lockScreenAndStage)
                 Text("Desktop Wallpaper (Behind active apps)").tag(WindowDisplayMode.desktop)
                 Text("Floating Overlay (Top layer)").tag(WindowDisplayMode.floating)
             }

@@ -2,12 +2,19 @@ import Foundation
 import Metal
 import MetalKit
 
-public final class MetalShaderRenderer {
+public final class MetalShaderRenderer: @unchecked Sendable {
     public static let shared = MetalShaderRenderer()
     
     public let device: MTLDevice?
     public let commandQueue: MTLCommandQueue?
     private var computePipelineState: MTLComputePipelineState?
+    
+    /// Global render loop suspension flag (e.g. Low Power Mode, battery preservation)
+    public var isSuspended: Bool = false
+    
+    /// Ambient frame rate limiter (30 FPS max: 1.0 / 30.0 = 0.0333s)
+    private var lastRenderTime: TimeInterval = 0
+    private let minimumFrameInterval: TimeInterval = 1.0 / 30.0
     
     private init() {
         self.device = MTLCreateSystemDefaultDevice()
@@ -48,6 +55,17 @@ public final class MetalShaderRenderer {
         radius: Float,
         strength: Float
     ) {
+        // Immediate thermal guard: when paused, suspended, or in low power mode, drop GPU to 0%
+        guard !isSuspended, PlaybackManager.shared.currentTrack.isPlaying else {
+            return
+        }
+        
+        let now = CACurrentMediaTime()
+        guard now - lastRenderTime >= minimumFrameInterval else {
+            return
+        }
+        lastRenderTime = now
+        
         guard let commandQueue = commandQueue,
               let pipelineState = computePipelineState,
               let commandBuffer = commandQueue.makeCommandBuffer(),

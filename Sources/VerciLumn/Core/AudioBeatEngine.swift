@@ -18,7 +18,7 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
     private var simulatedTimer: AnyCancellable?
     
     private var lastPublishTime: TimeInterval = 0
-    private let throttleInterval: TimeInterval = 1.0 / 45.0 // 45 FPS max update rate
+    private let throttleInterval: TimeInterval = 1.0 / 30.0 // 30 FPS cap for ambient bezel rendering
     
     private override init() {
         super.init()
@@ -106,6 +106,17 @@ public final class AudioBeatEngine: NSObject, ObservableObject, @unchecked Senda
     }
 
     public func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        // Immediate thermal guard: if music is paused, drop CPU to 0% immediately
+        guard PlaybackManager.shared.currentTrack.isPlaying else {
+            if beatIntensity > 0 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.beatIntensity = 0.0
+                    self?.onBeatPulse?(0.0)
+                }
+            }
+            return
+        }
+        
         guard type == .audio, let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
         
         let now = CACurrentMediaTime()

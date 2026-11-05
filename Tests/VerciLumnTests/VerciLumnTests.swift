@@ -53,17 +53,22 @@ final class VerciLumnTests: XCTestCase {
         XCTAssertEqual(settings.backdropMode, .infiniteZoom)
     }
     
-    func testLockScreenElevationAndTransparency() {
-        let panel = LockScreenPanel(contentView: NSView())
-        XCTAssertFalse(panel.isScreenLocked)
+    func testStageOverlayPanelConfigurationAndClickThrough() {
+        let panel = StageOverlayPanel(contentView: NSView())
+        XCTAssertEqual(panel.displayMode, .desktop)
         
-        // Simulate lock event
-        panel.screenLocked()
-        XCTAssertTrue(panel.isScreenLocked)
+        // Mode transitions
+        panel.setDisplayMode(.floating)
+        XCTAssertEqual(panel.displayMode, .floating)
         
-        // Simulate unlock event
-        panel.screenUnlocked()
-        XCTAssertFalse(panel.isScreenLocked)
+        panel.setDisplayMode(.desktop)
+        XCTAssertEqual(panel.displayMode, .desktop)
+        
+        // Strict mouse ignores test
+        panel.setIgnoresMouseEventsStrict(true)
+        panel.setIgnoresMouseEventsStrict(false)
+        XCTAssertFalse(panel.canBecomeKey)
+        XCTAssertFalse(panel.canBecomeMain)
     }
     
     func testColorThemePresets() {

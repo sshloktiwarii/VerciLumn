@@ -16,9 +16,29 @@ public final class AudioSpectrumEngine: ObservableObject, @unchecked Sendable {
     private var smoothBands: [Float] = Array(repeating: 0.05, count: 8)
     private var phase: Float = 0.0
     
+    // Pre-allocated Hardware Vector Processing Scratch Buffers (Zero heap reallocations during live playback)
+    private var hannWindow: [Float]
+    private var windowedSamples: [Float]
+    private var imagIn: [Float]
+    private var realOut: [Float]
+    private var imagOut: [Float]
+    private var magnitudes: [Float]
+    
     private init() {
         self.log2n = vDSP_Length(log2(Double(fftSize)))
         self.fftSetup = vDSP_DFT_zop_CreateSetup(nil, vDSP_Length(fftSize), .FORWARD)
+        
+        // Pre-compute Hann window once
+        var window = [Float](repeating: 0, count: fftSize)
+        vDSP_hann_window(&window, vDSP_Length(fftSize), Int32(vDSP_HANN_NORM))
+        self.hannWindow = window
+        
+        self.windowedSamples = [Float](repeating: 0, count: fftSize)
+        self.imagIn = [Float](repeating: 0, count: fftSize)
+        self.realOut = [Float](repeating: 0, count: fftSize)
+        self.imagOut = [Float](repeating: 0, count: fftSize)
+        self.magnitudes = [Float](repeating: 0, count: fftSize / 2)
+        
         startSimulatedFallback()
     }
     
@@ -29,27 +49,30 @@ public final class AudioSpectrumEngine: ObservableObject, @unchecked Sendable {
     }
     
     public func processAudio(samples: [Float]) {
+        // Immediate thermal guard: if music is paused, drop CPU to 0% immediately
+        guard PlaybackManager.shared.currentTrack.isPlaying else {
+            if overallEnergy > 0 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.bands = Array(repeating: 0.02, count: 8)
+                    self?.overallEnergy = 0.0
+                }
+            }
+            return
+        }
+        
         guard samples.count >= fftSize else { return }
         
-        // Windowing with Hann window
-        var window = [Float](repeating: 0, count: fftSize)
-        vDSP_hann_window(&window, vDSP_Length(fftSize), Int32(vDSP_HANN_NORM))
+        // Fast hardware vector multiplication using pre-computed Hann window
+        vDSP_vmul(samples, 1, hannWindow, 1, &windowedSamples, 1, vDSP_Length(fftSize))
         
-        var windowedSamples = [Float](repeating: 0, count: fftSize)
-        vDSP_vmul(samples, 1, window, 1, &windowedSamples, 1, vDSP_Length(fftSize))
-        
-        // Real & Imaginary buffers
         var realIn = windowedSamples
-        var imagIn = [Float](repeating: 0, count: fftSize)
-        var realOut = [Float](repeating: 0, count: fftSize)
-        var imagOut = [Float](repeating: 0, count: fftSize)
+        vDSP_vclr(&imagIn, 1, vDSP_Length(fftSize))
         
         if let setup = fftSetup {
             vDSP_DFT_Execute(setup, &realIn, &imagIn, &realOut, &imagOut)
         }
         
-        // Compute Magnitudes safely with persistent buffers
-        var magnitudes = [Float](repeating: 0, count: fftSize / 2)
+        // Compute Magnitudes safely using persistent vector buffers
         realOut.withUnsafeMutableBufferPointer { rBuf in
             imagOut.withUnsafeMutableBufferPointer { iBuf in
                 guard let rPtr = rBuf.baseAddress, let iPtr = iBuf.baseAddress else { return }
