@@ -52,42 +52,55 @@ public struct RootOverlayView: View {
         
         ZStack {
             if isPlaying || isLocked {
-                // 1. Dynamic Canvas Backdrop (Only if not transparent and not in floating overlay mode)
-                if settings.backdropMode != .transparent && settings.displayMode != .floating {
-                    backdropLayer
-                        .ignoresSafeArea()
-                        .allowsHitTesting(false)
-                }
-                
-                // 2. Audio Beat Reactive Display Bezel Glow
-                BezelGlowView(
-                    isEnabled: settings.isBezelEnabled,
-                    glowIntensityMultiplier: CGFloat(settings.glowSensitivity)
-                )
-                .allowsHitTesting(false)
-                
-                // 3. Main Stage Layout (Non-Overlapping Vertical Hierarchy)
-                VStack(spacing: 0) {
-                    // Tactile Timing Sync Nudge HUD
-                    TimingHUDView()
-                        .padding(.top, 36)
-                        .allowsHitTesting(false)
+                if settings.displayMode == .floating {
+                    // MARK: - Floating Top Overlay Mode (Draggable & Resizable Glassmorphic Pod)
+                    FloatingOverlayPodView()
                     
-                    Spacer(minLength: 24)
+                    VStack {
+                        TimingHUDView()
+                            .padding(.top, 36)
+                            .allowsHitTesting(false)
+                        Spacer()
+                    }
+                } else {
+                    // MARK: - Full Stage & Desktop Wallpaper Modes
+                    // 1. Dynamic Canvas Backdrop (Only if not transparent)
+                    if settings.backdropMode != .transparent {
+                        backdropLayer
+                            .ignoresSafeArea()
+                            .allowsHitTesting(false)
+                    }
                     
-                    // Synced Lyrics Center Stage
-                    VerciLyricsView(
-                        style: settings.lyricStyle,
-                        timingOffset: settings.timingOffset,
-                        textScale: settings.textScale
+                    // 2. Audio Beat Reactive Display Bezel Glow
+                    BezelGlowView(
+                        isEnabled: settings.isBezelEnabled,
+                        glowIntensityMultiplier: CGFloat(settings.glowSensitivity)
                     )
+                    .allowsHitTesting(false)
                     
-                    Spacer(minLength: 32)
-                    
-                    // Unified Non-Mushed Bottom Control Dock
-                    unifiedBottomDock
-                        .padding(.horizontal, 36)
-                        .padding(.bottom, 24)
+                    // 3. Main Stage Layout (Non-Overlapping Vertical Hierarchy)
+                    VStack(spacing: 0) {
+                        // Tactile Timing Sync Nudge HUD
+                        TimingHUDView()
+                            .padding(.top, 36)
+                            .allowsHitTesting(false)
+                        
+                        Spacer(minLength: 24)
+                        
+                        // Synced Lyrics Center Stage
+                        VerciLyricsView(
+                            style: settings.lyricStyle,
+                            timingOffset: settings.timingOffset,
+                            textScale: settings.textScale
+                        )
+                        
+                        Spacer(minLength: 32)
+                        
+                        // Unified Non-Mushed Bottom Control Dock
+                        unifiedBottomDock
+                            .padding(.horizontal, 36)
+                            .padding(.bottom, 24)
+                    }
                 }
             }
         }

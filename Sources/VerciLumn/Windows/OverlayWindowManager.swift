@@ -12,6 +12,11 @@ public final class OverlayWindowManager: ObservableObject {
     @Published public private(set) var currentMode: WindowDisplayMode = .desktop
     @Published public private(set) var isScreenLocked: Bool = false
     @Published public private(set) var isImmersiveMode: Bool = false
+    @Published public var floatingWidgetRect: CGRect?
+    
+    public func updateFloatingWidgetRect(_ rect: CGRect) {
+        self.floatingWidgetRect = rect
+    }
     
     private init() {
         // Observe AppSettings for Notch HUD toggle

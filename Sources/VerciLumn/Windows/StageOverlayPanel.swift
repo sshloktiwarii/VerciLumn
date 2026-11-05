@@ -23,35 +23,53 @@ public final class InteractivePassThroughHostingView<Content: View>: NSHostingVi
     }
     
     public override func hitTest(_ point: NSPoint) -> NSView? {
-        let isTransparent = (AppSettings.shared.backdropMode == .transparent || AppSettings.shared.displayMode == .floating)
+        let isFloating = AppSettings.shared.displayMode == .floating
+        let isTransparent = AppSettings.shared.backdropMode == .transparent
         
-        // If not transparent (i.e. solid dark stage like OLED black), visualizer controls receive clicks
-        if !isTransparent {
-            return super.hitTest(point)
+        // 1. Floating Overlay Mode: Intercept clicks strictly inside the draggable / resizable floating pod
+        if isFloating {
+            if let swiftUIRect = OverlayWindowManager.shared.floatingWidgetRect {
+                let h = bounds.height
+                // Convert SwiftUI (top-left origin) to AppKit (bottom-left origin) with an 8px generous margin
+                let appKitRect = NSRect(
+                    x: swiftUIRect.origin.x - 8,
+                    y: h - swiftUIRect.origin.y - swiftUIRect.height - 8,
+                    width: swiftUIRect.width + 16,
+                    height: swiftUIRect.height + 16
+                )
+                if appKitRect.contains(point) {
+                    return super.hitTest(point)
+                }
+            }
+            // Outside the floating pod in floating mode: strictly pass clicks through to background apps
+            return nil
         }
         
-        // Transparent mode hit-testing:
-        // AppKit coordinates: (0, 0) is bottom-left
-        let h = bounds.height
-        let w = bounds.width
-        guard h > 0, w > 0 else { return nil }
-        
-        // 1. Bottom Dock region (y: 0 to 140): Intercept clicks for scrubber and Now Playing card
-        if point.y <= 140 {
-            return super.hitTest(point)
+        // 2. Transparent Full Stage Mode: pass-through with interactive center lyrics and bottom dock
+        if isTransparent {
+            let h = bounds.height
+            let w = bounds.width
+            guard h > 0, w > 0 else { return nil }
+            
+            // Bottom Dock region (y: 0 to 140)
+            if point.y <= 140 {
+                return super.hitTest(point)
+            }
+            
+            // Center Lyrics region (y: 22% to 78%, x: 10% to 90%)
+            let lyricYMin = h * 0.22
+            let lyricYMax = h * 0.78
+            let lyricXMin = w * 0.10
+            let lyricXMax = w * 0.90
+            if point.y >= lyricYMin && point.y <= lyricYMax && point.x >= lyricXMin && point.x <= lyricXMax {
+                return super.hitTest(point)
+            }
+            
+            return nil
         }
         
-        // 2. Center Lyrics region (y: 22% to 78%, x: 10% to 90%): Intercept clicks for lyrics rewind/skip/seek
-        let lyricYMin = h * 0.22
-        let lyricYMax = h * 0.78
-        let lyricXMin = w * 0.10
-        let lyricXMax = w * 0.90
-        if point.y >= lyricYMin && point.y <= lyricYMax && point.x >= lyricXMin && point.x <= lyricXMax {
-            return super.hitTest(point)
-        }
-        
-        // Outside interactive areas in transparent mode: strictly pass click through to desktop/background apps
-        return nil
+        // 3. Solid Stage: full interactive
+        return super.hitTest(point)
     }
 }
 

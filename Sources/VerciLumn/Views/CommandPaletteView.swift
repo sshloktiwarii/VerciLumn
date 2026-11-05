@@ -222,6 +222,16 @@ public struct CommandPaletteView: View {
                 }
             ),
             CommandItem(
+                title: "Reset Floating Pod Position & Size",
+                subtitle: "Center the floating lyrics pod and reset size to 540x360",
+                icon: "arrow.counterclockwise.circle",
+                category: .stage,
+                shortcut: nil,
+                action: {
+                    settings.resetFloatingGeometry()
+                }
+            ),
+            CommandItem(
                 title: "Switch to Desktop Wallpaper Mode",
                 subtitle: "Pin visualizer behind all desktop windows directly above wallpaper",
                 icon: "display",

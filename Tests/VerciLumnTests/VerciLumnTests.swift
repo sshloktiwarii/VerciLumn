@@ -711,4 +711,68 @@ final class VerciLumnTests: XCTestCase {
         }
         wait(for: [expDisable], timeout: 2.0)
     }
+    
+    func testDraggableResizableFloatingOverlayPodGeometryAndHitTesting() {
+        let settings = AppSettings.shared
+        let windowManager = OverlayWindowManager.shared
+        
+        // 1. Initial / Default geometry
+        settings.resetFloatingGeometry()
+        XCTAssertEqual(settings.floatingOffsetX, 0.0)
+        XCTAssertEqual(settings.floatingOffsetY, 0.0)
+        XCTAssertEqual(settings.floatingWidth, 540.0)
+        XCTAssertEqual(settings.floatingHeight, 360.0)
+        
+        // 2. Drag offset modifications
+        settings.floatingOffsetX = 120.0
+        settings.floatingOffsetY = -80.0
+        XCTAssertEqual(settings.floatingOffsetX, 120.0)
+        XCTAssertEqual(settings.floatingOffsetY, -80.0)
+        
+        // 3. Resizing clamping stress tests
+        settings.floatingWidth = 200.0 // Below minimum 320
+        XCTAssertEqual(settings.floatingWidth, 320.0, "Width must clamp at min 320")
+        
+        settings.floatingWidth = 2500.0 // Above maximum 1200
+        XCTAssertEqual(settings.floatingWidth, 1200.0, "Width must clamp at max 1200")
+        
+        settings.floatingHeight = 100.0 // Below minimum 180
+        XCTAssertEqual(settings.floatingHeight, 180.0, "Height must clamp at min 180")
+        
+        settings.floatingHeight = 1500.0 // Above maximum 800
+        XCTAssertEqual(settings.floatingHeight, 800.0, "Height must clamp at max 800")
+        
+        // 4. Reset function restores standard dimensions
+        settings.resetFloatingGeometry()
+        XCTAssertEqual(settings.floatingWidth, 540.0)
+        XCTAssertEqual(settings.floatingHeight, 360.0)
+        XCTAssertEqual(settings.floatingOffsetX, 0.0)
+        XCTAssertEqual(settings.floatingOffsetY, 0.0)
+        
+        // 5. Test Hit Testing conversion in StageOverlayPanel
+        settings.displayMode = .floating
+        let screenRect = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let hostingView = InteractivePassThroughHostingView(rootView: RootOverlayView())
+        hostingView.frame = screenRect
+        let panel = StageOverlayPanel(contentView: hostingView)
+        panel.setFrame(screenRect, display: false)
+        
+        // Simulate floating pod reported by SwiftUI GeometryReader:
+        // centered pod at x: 450, y: 270, width: 540, height: 360 (top-left SwiftUI coords)
+        let swiftUIRect = CGRect(x: 450, y: 270, width: 540, height: 360)
+        windowManager.updateFloatingWidgetRect(swiftUIRect)
+        XCTAssertEqual(windowManager.floatingWidgetRect, swiftUIRect)
+        
+        // AppKit coordinates:
+        // y in AppKit = 900 - 270 - 360 = 270 to 630
+        // Center point: x = 720, y = 450
+        let insidePoint = NSPoint(x: 720, y: 450)
+        let outsidePoint = NSPoint(x: 100, y: 100)
+        
+        let insideResult = hostingView.hitTest(insidePoint)
+        XCTAssertNotNil(insideResult, "Clicks inside floating pod must be intercepted for drag/resize/seeking")
+        
+        let outsideResult = hostingView.hitTest(outsidePoint)
+        XCTAssertNil(outsideResult, "Clicks outside floating pod must pass through to background apps")
+    }
 }

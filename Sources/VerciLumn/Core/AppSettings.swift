@@ -28,6 +28,10 @@ public final class AppSettings: ObservableObject {
         static let translationEnabled = "vercilumn_translation_enabled"
         static let translationLanguage = "vercilumn_translation_language"
         static let immersiveModeEnabled = "vercilumn_immersive_mode_enabled"
+        static let floatingOffsetX = "vercilumn_floating_offset_x"
+        static let floatingOffsetY = "vercilumn_floating_offset_y"
+        static let floatingWidth = "vercilumn_floating_width"
+        static let floatingHeight = "vercilumn_floating_height"
     }
     
     // Published Properties
@@ -109,6 +113,38 @@ public final class AppSettings: ObservableObject {
             UserDefaults.standard.set(isImmersiveModeEnabled, forKey: Keys.immersiveModeEnabled)
             OverlayWindowManager.shared.setImmersiveMode(isImmersiveModeEnabled)
         }
+    }
+    
+    // Draggable & Resizable Floating Top Overlay Geometry
+    @Published public var floatingOffsetX: Double {
+        didSet { UserDefaults.standard.set(floatingOffsetX, forKey: Keys.floatingOffsetX) }
+    }
+    
+    @Published public var floatingOffsetY: Double {
+        didSet { UserDefaults.standard.set(floatingOffsetY, forKey: Keys.floatingOffsetY) }
+    }
+    
+    @Published public var floatingWidth: Double {
+        didSet {
+            let clamped = max(320.0, min(1200.0, floatingWidth))
+            if clamped != floatingWidth { floatingWidth = clamped; return }
+            UserDefaults.standard.set(clamped, forKey: Keys.floatingWidth)
+        }
+    }
+    
+    @Published public var floatingHeight: Double {
+        didSet {
+            let clamped = max(180.0, min(800.0, floatingHeight))
+            if clamped != floatingHeight { floatingHeight = clamped; return }
+            UserDefaults.standard.set(clamped, forKey: Keys.floatingHeight)
+        }
+    }
+    
+    public func resetFloatingGeometry() {
+        self.floatingOffsetX = 0.0
+        self.floatingOffsetY = 0.0
+        self.floatingWidth = 540.0
+        self.floatingHeight = 360.0
     }
     
     // Tactile Timing HUD Feedback
@@ -193,6 +229,13 @@ public final class AppSettings: ObservableObject {
         self.translationLanguage = defaults.string(forKey: Keys.translationLanguage) ?? "en"
         
         self.isImmersiveModeEnabled = defaults.bool(forKey: Keys.immersiveModeEnabled)
+        
+        self.floatingOffsetX = defaults.double(forKey: Keys.floatingOffsetX)
+        self.floatingOffsetY = defaults.double(forKey: Keys.floatingOffsetY)
+        let savedWidth = defaults.double(forKey: Keys.floatingWidth)
+        self.floatingWidth = savedWidth > 0 ? savedWidth : 540.0
+        let savedHeight = defaults.double(forKey: Keys.floatingHeight)
+        self.floatingHeight = savedHeight > 0 ? savedHeight : 360.0
         
         if self.isBezelEnabled && self.bezelSourceMode == .screenSampling {
             ScreenSampler.shared.start()
