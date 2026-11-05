@@ -54,14 +54,19 @@ public struct RootOverlayView: View {
             if isPlaying || isLocked {
                 if settings.displayMode == .floating {
                     // MARK: - Floating Top Overlay Mode (Draggable & Resizable Glassmorphic Pod)
-                    FloatingOverlayPodView()
-                    
-                    VStack {
-                        TimingHUDView()
-                            .padding(.top, 36)
-                            .allowsHitTesting(false)
-                        Spacer()
+                    ZStack {
+                        FloatingOverlayPodView()
+                        
+                        VStack {
+                            TimingHUDView()
+                                .padding(.top, 36)
+                                .allowsHitTesting(false)
+                            Spacer()
+                        }
+                        .allowsHitTesting(false)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
                 } else {
                     // MARK: - Full Stage & Desktop Wallpaper Modes
                     // 1. Dynamic Canvas Backdrop (Only if not transparent)

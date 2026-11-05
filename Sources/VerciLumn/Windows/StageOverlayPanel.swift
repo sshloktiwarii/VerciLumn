@@ -110,6 +110,7 @@ public final class StageOverlayPanel: NSPanel {
     
     public func setDisplayMode(_ mode: WindowDisplayMode) {
         self.displayMode = mode
+        expandToScreenBounds()
         updateWindowLevel()
     }
     

@@ -21,7 +21,6 @@ public final class HotKeyManager: ObservableObject {
     
     private init() {
         checkAccessibilityPermissions()
-        startHotkeyMonitors()
         startIdleTimer()
     }
     
@@ -46,6 +45,7 @@ public final class HotKeyManager: ObservableObject {
     }
     
     public func startHotkeyMonitors() {
+        stopHotkeyMonitors()
         // Global Key Monitor (when other applications have focus)
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyEvent(event, isLocal: false)
