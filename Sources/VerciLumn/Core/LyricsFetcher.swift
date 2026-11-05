@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-public struct WordToken: Identifiable, Equatable {
+public struct WordToken: Identifiable, Equatable, Sendable {
     public let id = UUID()
     public let text: String
     public let timestamp: TimeInterval
@@ -24,20 +24,23 @@ public struct WordToken: Identifiable, Equatable {
     }
 }
 
-public struct LyricLine: Identifiable, Equatable {
-    public let id = UUID()
+public struct LyricLine: Identifiable, Equatable, Sendable {
+    public let id: UUID
     public let timestamp: TimeInterval
     public let fullText: String
     public let words: [WordToken]
+    public let translation: String?
     
-    public init(timestamp: TimeInterval, fullText: String, words: [WordToken] = []) {
+    public init(id: UUID = UUID(), timestamp: TimeInterval, fullText: String, words: [WordToken] = [], translation: String? = nil) {
+        self.id = id
         self.timestamp = timestamp
         self.fullText = fullText
         self.words = words
+        self.translation = translation
     }
 }
 
-public struct LyricsData: Equatable {
+public struct LyricsData: Equatable, Sendable {
     public let trackTitle: String
     public let artistName: String
     public let lines: [LyricLine]
@@ -244,6 +247,21 @@ public final class LyricsFetcher: ObservableObject {
             guard let self = self, self.activeGeneration == generation else { return }
             self.currentLyrics = lyrics
             self.isLoading = false
+        }
+        
+        // Asynchronous non-blocking background translation (Ollama / Google Translate)
+        if AppSettings.shared.isTranslationEnabled && !lyrics.lines.isEmpty {
+            LyricsTranslator.shared.translateAsync(
+                lyrics: lyrics,
+                targetLanguage: AppSettings.shared.translationLanguage,
+                generation: generation
+            ) { [weak self] translatedLyrics in
+                guard let self = self, self.activeGeneration == generation else { return }
+                DispatchQueue.main.async {
+                    self.currentLyrics = translatedLyrics
+                    self.lyricsCache.setObject(LyricsDataBox(translatedLyrics), forKey: key)
+                }
+            }
         }
     }
     

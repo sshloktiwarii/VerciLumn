@@ -241,6 +241,26 @@ public struct CommandPaletteView: View {
             
             // MARK: - Performance & Settings
             CommandItem(
+                title: "Toggle Screen Ambilight Mode",
+                subtitle: "Switch between audio FFT and 128x72 CGDisplayStream edge sampling",
+                icon: "display",
+                category: .engine,
+                shortcut: nil,
+                action: {
+                    settings.bezelSourceMode = (settings.bezelSourceMode == .screenSampling) ? .audioReactive : .screenSampling
+                }
+            ),
+            CommandItem(
+                title: "Toggle Live Lyric AI Translation",
+                subtitle: "Asynchronously translate foreign lyrics with local Ollama or Google Translate",
+                icon: "character.bubble.fill",
+                category: .timing,
+                shortcut: nil,
+                action: {
+                    settings.isTranslationEnabled.toggle()
+                }
+            ),
+            CommandItem(
                 title: "Toggle Low Power Mode",
                 subtitle: "Cap frame updates to 30 FPS and suspend heavy shaders",
                 icon: "battery.50percent",

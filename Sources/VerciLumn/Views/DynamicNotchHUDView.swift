@@ -220,40 +220,55 @@ public struct DynamicNotchHUDView: View {
             
             Spacer()
             
-            // Playback Transport Controls
+            // Glass-Morphic ScriptingBridge Media Controls
             HStack(spacing: 8) {
                 Button {
                     playback.previousTrack()
                 } label: {
                     Image(systemName: "backward.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.8))
-                        .padding(6)
-                        .background(Circle().fill(Color.white.opacity(0.1)))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.08))
+                                .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
+                        )
                 }
                 .buttonStyle(.plain)
+                .help("Previous Track (ScriptingBridge)")
                 
                 Button {
                     playback.togglePlayPause()
                 } label: {
                     Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: 13, weight: .black))
                         .foregroundColor(.black)
-                        .padding(8)
-                        .background(Circle().fill(activeColor))
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(activeColor)
+                                .shadow(color: activeColor.opacity(0.4), radius: 6, y: 1)
+                        )
                 }
                 .buttonStyle(.plain)
+                .help(track.isPlaying ? "Pause (ScriptingBridge)" : "Play (ScriptingBridge)")
                 
                 Button {
                     playback.nextTrack()
                 } label: {
                     Image(systemName: "forward.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.8))
-                        .padding(6)
-                        .background(Circle().fill(Color.white.opacity(0.1)))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.08))
+                                .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
+                        )
                 }
                 .buttonStyle(.plain)
+                .help("Next Track (ScriptingBridge)")
             }
         }
     }

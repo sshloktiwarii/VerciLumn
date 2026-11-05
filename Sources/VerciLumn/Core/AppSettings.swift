@@ -1,6 +1,13 @@
 import SwiftUI
 import Combine
 
+public enum BezelSourceMode: String, CaseIterable, Identifiable {
+    case audioReactive = "Audio Reactive (FFT)"
+    case screenSampling = "Screen Ambilight (CGDisplayStream)"
+    
+    public var id: String { rawValue }
+}
+
 public final class AppSettings: ObservableObject {
     public static let shared = AppSettings()
     
@@ -8,6 +15,7 @@ public final class AppSettings: ObservableObject {
     private enum Keys {
         static let lyricStyle = "vercilumn_lyric_style"
         static let bezelEnabled = "vercilumn_bezel_enabled"
+        static let bezelSourceMode = "vercilumn_bezel_source_mode"
         static let glowSensitivity = "vercilumn_glow_sensitivity"
         static let displayMode = "vercilumn_display_mode"
         static let backdropMode = "vercilumn_backdrop_mode"
@@ -17,6 +25,8 @@ public final class AppSettings: ObservableObject {
         static let interactiveSeekEnabled = "vercilumn_interactive_seek_enabled"
         static let fisheyeShaderEnabled = "vercilumn_fisheye_shader_enabled"
         static let lowPowerModeEnabled = "vercilumn_low_power_mode_enabled"
+        static let translationEnabled = "vercilumn_translation_enabled"
+        static let translationLanguage = "vercilumn_translation_language"
     }
     
     // Published Properties
@@ -25,7 +35,25 @@ public final class AppSettings: ObservableObject {
     }
     
     @Published public var isBezelEnabled: Bool {
-        didSet { UserDefaults.standard.set(isBezelEnabled, forKey: Keys.bezelEnabled) }
+        didSet {
+            UserDefaults.standard.set(isBezelEnabled, forKey: Keys.bezelEnabled)
+            if isBezelEnabled && bezelSourceMode == .screenSampling {
+                ScreenSampler.shared.start()
+            } else {
+                ScreenSampler.shared.stop()
+            }
+        }
+    }
+    
+    @Published public var bezelSourceMode: BezelSourceMode {
+        didSet {
+            UserDefaults.standard.set(bezelSourceMode.rawValue, forKey: Keys.bezelSourceMode)
+            if isBezelEnabled && bezelSourceMode == .screenSampling {
+                ScreenSampler.shared.start()
+            } else {
+                ScreenSampler.shared.stop()
+            }
+        }
     }
     
     @Published public var glowSensitivity: Double {
@@ -62,6 +90,14 @@ public final class AppSettings: ObservableObject {
     
     @Published public var isLowPowerModeEnabled: Bool {
         didSet { UserDefaults.standard.set(isLowPowerModeEnabled, forKey: Keys.lowPowerModeEnabled) }
+    }
+    
+    @Published public var isTranslationEnabled: Bool {
+        didSet { UserDefaults.standard.set(isTranslationEnabled, forKey: Keys.translationEnabled) }
+    }
+    
+    @Published public var translationLanguage: String {
+        didSet { UserDefaults.standard.set(translationLanguage, forKey: Keys.translationLanguage) }
     }
     
     // Tactile Timing HUD Feedback
@@ -116,6 +152,9 @@ public final class AppSettings: ObservableObject {
         
         self.isBezelEnabled = defaults.object(forKey: Keys.bezelEnabled) != nil ? defaults.bool(forKey: Keys.bezelEnabled) : true
         
+        let savedBezelSourceRaw = defaults.string(forKey: Keys.bezelSourceMode) ?? ""
+        self.bezelSourceMode = BezelSourceMode(rawValue: savedBezelSourceRaw) ?? .audioReactive
+        
         let sensitivity = defaults.double(forKey: Keys.glowSensitivity)
         self.glowSensitivity = sensitivity > 0 ? sensitivity : 1.0
         
@@ -138,5 +177,12 @@ public final class AppSettings: ObservableObject {
         self.isFisheyeShaderEnabled = defaults.bool(forKey: Keys.fisheyeShaderEnabled)
         
         self.isLowPowerModeEnabled = defaults.bool(forKey: Keys.lowPowerModeEnabled)
+        
+        self.isTranslationEnabled = defaults.object(forKey: Keys.translationEnabled) != nil ? defaults.bool(forKey: Keys.translationEnabled) : true
+        self.translationLanguage = defaults.string(forKey: Keys.translationLanguage) ?? "en"
+        
+        if self.isBezelEnabled && self.bezelSourceMode == .screenSampling {
+            ScreenSampler.shared.start()
+        }
     }
 }

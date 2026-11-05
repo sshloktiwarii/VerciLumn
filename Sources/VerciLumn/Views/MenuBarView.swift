@@ -92,6 +92,27 @@ public struct MenuBarView: View {
                             description: "Renders SF Symbols above matching semantic lyric tokens.",
                             isOn: $semanticEngine.isEnabled
                         )
+                        
+                        // Feature F: Screen Ambilight Sampling
+                        featureRow(
+                            icon: "display",
+                            title: "Screen Ambilight (CGDisplayStream)",
+                            shortcut: nil,
+                            description: "Samples 128x72 display edge pixels to drive bezel glow during movies & games.",
+                            isOn: Binding(
+                                get: { settings.bezelSourceMode == .screenSampling },
+                                set: { settings.bezelSourceMode = $0 ? .screenSampling : .audioReactive }
+                            )
+                        )
+                        
+                        // Feature G: Live Lyric Translation
+                        featureRow(
+                            icon: "character.bubble.fill",
+                            title: "Live Lyric AI Translation",
+                            shortcut: nil,
+                            description: "Translates synced lyrics asynchronously via local Ollama or Google Translate.",
+                            isOn: $settings.isTranslationEnabled
+                        )
                     }
                     .padding(.top, 6)
                 } label: {

@@ -19,9 +19,9 @@
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>VerciLumn requires audio capture permissions to generate real-time beat reactive visuals.</string>
+    <string>VerciLumn requires screen capture permissions to extract real-time edge colors for hardware-accelerated Ambilight bezel illumination.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>VerciLumn reads now-playing track information from Spotify and Apple Music.</string>
+    <string>VerciLumn requires AppleEvents permissions to read track metadata and control playback across Spotify and Apple Music.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>VerciLumn uses microphone input as a fallback to generate real-time ambient lighting beats when system audio capture is unavailable.</string>
     <key>SUFeedURL</key>

@@ -27,7 +27,7 @@ public enum SemanticMood: String, CaseIterable, Identifiable {
     }
 }
 
-public struct SemanticStyle: Equatable {
+public struct SemanticStyle: Equatable, @unchecked Sendable {
     public let mood: SemanticMood
     public let fontDesign: Font.Design
     public let fontWeight: Font.Weight

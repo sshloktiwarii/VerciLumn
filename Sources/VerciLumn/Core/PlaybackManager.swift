@@ -413,26 +413,12 @@ public final class PlaybackManager: ObservableObject {
         AppSettings.shared.resetTimingOffset()
     }
     
-    // MARK: - Playback Media Controls
+    // MARK: - Playback Media Controls (ScriptingBridge & AppleEvents)
     
     public func togglePlayPause() {
         let source = currentTrack.playerSource
         pollQueue.async { [weak self] in
-            if source == "Spotify" {
-                let script = """
-                if application "Spotify" is running then
-                    tell application "Spotify" to playpause
-                end if
-                """
-                NSAppleScript(source: script)?.executeAndReturnError(nil)
-            } else {
-                let script = """
-                if application "Music" is running then
-                    tell application "Music" to playpause
-                end if
-                """
-                NSAppleScript(source: script)?.executeAndReturnError(nil)
-            }
+            ScriptingBridgeController.shared.togglePlayPause(source: source)
             self?.pollActivePlayer()
         }
     }
@@ -440,21 +426,7 @@ public final class PlaybackManager: ObservableObject {
     public func nextTrack() {
         let source = currentTrack.playerSource
         pollQueue.async { [weak self] in
-            if source == "Spotify" {
-                let script = """
-                if application "Spotify" is running then
-                    tell application "Spotify" to next track
-                end if
-                """
-                NSAppleScript(source: script)?.executeAndReturnError(nil)
-            } else {
-                let script = """
-                if application "Music" is running then
-                    tell application "Music" to next track
-                end if
-                """
-                NSAppleScript(source: script)?.executeAndReturnError(nil)
-            }
+            ScriptingBridgeController.shared.nextTrack(source: source)
             self?.pollActivePlayer()
         }
     }
@@ -462,21 +434,7 @@ public final class PlaybackManager: ObservableObject {
     public func previousTrack() {
         let source = currentTrack.playerSource
         pollQueue.async { [weak self] in
-            if source == "Spotify" {
-                let script = """
-                if application "Spotify" is running then
-                    tell application "Spotify" to previous track
-                end if
-                """
-                NSAppleScript(source: script)?.executeAndReturnError(nil)
-            } else {
-                let script = """
-                if application "Music" is running then
-                    tell application "Music" to previous track
-                end if
-                """
-                NSAppleScript(source: script)?.executeAndReturnError(nil)
-            }
+            ScriptingBridgeController.shared.previousTrack(source: source)
             self?.pollActivePlayer()
         }
     }

@@ -151,64 +151,78 @@ public struct VerciLyricsView: View {
                     }
                     
                     // 2. Active Singing Line (Center Stage with Word Highlighting & VFX)
-                    if !currentLine.words.isEmpty {
-                        HStack(spacing: 10 * textScale) {
-                            ForEach(currentLine.words) { word in
-                                let isCurrentWord = (currentTime >= word.timestamp && currentTime < word.timestamp + word.duration)
-                                let isPastWord = currentTime >= word.timestamp + word.duration
-                                
-                                Button {
-                                    if settings.isInteractiveSeekEnabled {
-                                        playback.seekTo(seconds: word.timestamp)
-                                    }
-                                } label: {
-                                    if isCurrentWord && WordSemanticEngine.shared.isEnabled {
-                                        SemanticWordView(
-                                            word: word.text,
-                                            fontSize: activeFontSize,
-                                            accentColor: activeColor,
-                                            beatIntensity: audio.beatIntensity,
-                                            cachedStyle: word.semanticStyle,
-                                            cachedIcon: word.iconSymbol,
-                                            onTap: {
-                                                if settings.isInteractiveSeekEnabled {
-                                                    playback.seekTo(seconds: word.timestamp)
+                    VStack(spacing: 8 * textScale) {
+                        if !currentLine.words.isEmpty {
+                            HStack(spacing: 10 * textScale) {
+                                ForEach(currentLine.words) { word in
+                                    let isCurrentWord = (currentTime >= word.timestamp && currentTime < word.timestamp + word.duration)
+                                    let isPastWord = currentTime >= word.timestamp + word.duration
+                                    
+                                    Button {
+                                        if settings.isInteractiveSeekEnabled {
+                                            playback.seekTo(seconds: word.timestamp)
+                                        }
+                                    } label: {
+                                        if isCurrentWord && WordSemanticEngine.shared.isEnabled {
+                                            SemanticWordView(
+                                                word: word.text,
+                                                fontSize: activeFontSize,
+                                                accentColor: activeColor,
+                                                beatIntensity: audio.beatIntensity,
+                                                cachedStyle: word.semanticStyle,
+                                                cachedIcon: word.iconSymbol,
+                                                onTap: {
+                                                    if settings.isInteractiveSeekEnabled {
+                                                        playback.seekTo(seconds: word.timestamp)
+                                                    }
                                                 }
-                                            }
-                                        )
-                                    } else {
-                                        Text(word.text)
-                                            .font(.system(
-                                                size: isCurrentWord ? activeFontSize : activeFontSize * 0.92,
-                                                weight: isCurrentWord ? .black : (isPastWord ? .bold : .medium),
-                                                design: theme.currentTypography.design
-                                            ))
-                                            .foregroundColor(isCurrentWord ? activeColor : (isPastWord ? Color.white : Color.white.opacity(0.38)))
-                                            .shadow(color: isCurrentWord ? activeColor.opacity(0.8) : .clear, radius: 14)
+                                            )
+                                        } else {
+                                            Text(word.text)
+                                                .font(.system(
+                                                    size: isCurrentWord ? activeFontSize : activeFontSize * 0.92,
+                                                    weight: isCurrentWord ? .black : (isPastWord ? .bold : .medium),
+                                                    design: theme.currentTypography.design
+                                                ))
+                                                .foregroundColor(isCurrentWord ? activeColor : (isPastWord ? Color.white : Color.white.opacity(0.38)))
+                                                .shadow(color: isCurrentWord ? activeColor.opacity(0.8) : .clear, radius: 14)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .onHover { isHovered in
+                                        if isHovered { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                                     }
                                 }
-                                .buttonStyle(.plain)
-                                .onHover { isHovered in
-                                    if isHovered { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                            }
+                            .padding(.horizontal, 20)
+                        } else {
+                            // Plain line fallback if word timestamps are unassigned
+                            Button {
+                                if settings.isInteractiveSeekEnabled {
+                                    playback.seekTo(seconds: currentLine.timestamp)
                                 }
+                            } label: {
+                                Text(currentLine.fullText)
+                                    .font(.system(size: activeFontSize, weight: .black, design: theme.currentTypography.design))
+                                    .foregroundColor(activeColor)
+                                    .shadow(color: activeColor.opacity(0.7), radius: 16)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.center)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 20)
-                    } else {
-                        // Plain line fallback if word timestamps are unassigned
-                        Button {
-                            if settings.isInteractiveSeekEnabled {
-                                playback.seekTo(seconds: currentLine.timestamp)
-                            }
-                        } label: {
-                            Text(currentLine.fullText)
-                                .font(.system(size: activeFontSize, weight: .black, design: theme.currentTypography.design))
-                                .foregroundColor(activeColor)
-                                .shadow(color: activeColor.opacity(0.7), radius: 16)
+                        
+                        // Live Translated Lyric Subtitle (Stacked below singing WordTokens)
+                        if settings.isTranslationEnabled, let translation = currentLine.translation, !translation.isEmpty {
+                            Text(translation)
+                                .font(.system(size: min(18.0 * textScale, 22.0), weight: .medium, design: theme.currentTypography.design))
+                                .foregroundColor(Color.white.opacity(0.65))
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
+                                .padding(.horizontal, 28)
+                                .padding(.top, 2 * textScale)
+                                .transition(.opacity)
                         }
-                        .buttonStyle(.plain)
                     }
                     
                     // 3. Next Line (Click to Skip Forward)
@@ -330,8 +344,17 @@ public struct VerciLyricsView: View {
                 }
             }
             .buttonStyle(.plain)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: activeIndex)
+            
+            if settings.isTranslationEnabled, let translation = currentLine.translation, !translation.isEmpty {
+                Text("// SUB: \(translation.uppercased()) //")
+                    .font(.system(size: 13 * textScale, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: activeIndex)
     }
     
     // MARK: - Style 5: Cinematic Crossfade Stack

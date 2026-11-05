@@ -492,4 +492,157 @@ final class VerciLumnTests: XCTestCase {
         idleModel.stepFrame()
         XCTAssertEqual(idleModel.phase, initialPhase, "Phase must freeze during idle screensaver to guarantee 0% GPU")
     }
+    
+    func testScreenSamplerSyntheticBufferAndEdgeExtraction() {
+        let width = 128
+        let height = 72
+        let bytesPerRow = width * 4
+        var buffer = [UInt8](repeating: 0, count: height * bytesPerRow)
+        
+        // Write known BGRA colors to the outer 1-pixel borders:
+        // Top edge: Red (B:0, G:0, R:255, A:255)
+        for x in 0..<width {
+            let offset = x * 4
+            buffer[offset] = 0       // B
+            buffer[offset + 1] = 0   // G
+            buffer[offset + 2] = 255 // R
+            buffer[offset + 3] = 255 // A
+        }
+        
+        // Bottom edge: Blue (B:255, G:0, R:0, A:255)
+        let lastRowOffset = (height - 1) * bytesPerRow
+        for x in 0..<width {
+            let offset = lastRowOffset + x * 4
+            buffer[offset] = 255     // B
+            buffer[offset + 1] = 0   // G
+            buffer[offset + 2] = 0   // R
+            buffer[offset + 3] = 255 // A
+        }
+        
+        // Left edge: Green (B:0, G:255, R:0, A:255)
+        for y in 0..<height {
+            let offset = y * bytesPerRow
+            buffer[offset] = 0       // B
+            buffer[offset + 1] = 255 // G
+            buffer[offset + 2] = 0   // R
+            buffer[offset + 3] = 255 // A
+        }
+        
+        // Right edge: White (B:255, G:255, R:255, A:255)
+        for y in 0..<height {
+            let offset = y * bytesPerRow + (width - 1) * 4
+            buffer[offset] = 255     // B
+            buffer[offset + 1] = 255 // G
+            buffer[offset + 2] = 255 // R
+            buffer[offset + 3] = 255 // A
+        }
+        
+        buffer.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else {
+                XCTFail("Failed to get raw buffer base address")
+                return
+            }
+            
+            let result = ScreenSampler.computeEdgeColors(
+                baseAddress: baseAddress,
+                width: width,
+                height: height,
+                bytesPerRow: bytesPerRow
+            )
+            
+            // Top edge should be dominant red
+            XCTAssertGreaterThanOrEqual(result.top.r, 0.95)
+            XCTAssertLessThanOrEqual(result.top.g, 0.1)
+            
+            // Bottom edge should be dominant blue
+            XCTAssertGreaterThanOrEqual(result.bottom.b, 0.95)
+            XCTAssertLessThanOrEqual(result.bottom.r, 0.1)
+            
+            // Left edge should be dominant green
+            XCTAssertGreaterThanOrEqual(result.left.g, 0.95)
+            XCTAssertLessThanOrEqual(result.left.r, 0.1)
+            
+            // Right edge should be white (all channels high)
+            XCTAssertGreaterThanOrEqual(result.right.r, 0.95)
+            XCTAssertGreaterThanOrEqual(result.right.g, 0.95)
+            XCTAssertGreaterThanOrEqual(result.right.b, 0.95)
+        }
+        
+        // Test degenerate buffer bounds safety
+        let singlePixel = [UInt8](repeating: 128, count: 4)
+        singlePixel.withUnsafeBytes { raw in
+            let degenerate = ScreenSampler.computeEdgeColors(
+                baseAddress: raw.baseAddress!,
+                width: 1,
+                height: 1,
+                bytesPerRow: 4
+            )
+            XCTAssertEqual(degenerate.top.r, 0.0)
+            XCTAssertEqual(degenerate.bottom.r, 0.0)
+        }
+        
+        // Lifecycle safety
+        let sampler = ScreenSampler.shared
+        sampler.stop()
+        XCTAssertFalse(sampler.isRunning)
+    }
+    
+    func testScriptingBridgeControllerAndMediaControls() {
+        let bridge = ScriptingBridgeController.shared
+        
+        // Ensure calls are completely safe and do not throw in test environments
+        bridge.togglePlayPause(source: "Spotify")
+        bridge.nextTrack(source: "Spotify")
+        bridge.previousTrack(source: "Spotify")
+        
+        bridge.togglePlayPause(source: "Apple Music")
+        bridge.nextTrack(source: "Apple Music")
+        bridge.previousTrack(source: "Apple Music")
+        
+        // PlaybackManager public control facade
+        let playback = PlaybackManager.shared
+        playback.togglePlayPause()
+        playback.nextTrack()
+        playback.previousTrack()
+        
+        XCTAssertNotNil(playback.currentTrack)
+    }
+    
+    func testLyricsTranslatorAndSubtitleStacking() {
+        let line1 = LyricLine(
+            timestamp: 10.0,
+            fullText: "Je te laisserai des mots",
+            words: [
+                WordToken(text: "Je", timestamp: 10.0),
+                WordToken(text: "te", timestamp: 10.3),
+                WordToken(text: "laisserai", timestamp: 10.6)
+            ],
+            translation: "I will leave you notes"
+        )
+        
+        XCTAssertEqual(line1.translation, "I will leave you notes")
+        XCTAssertEqual(line1.fullText, "Je te laisserai des mots")
+        XCTAssertEqual(line1.words.count, 3)
+        
+        let lyricsData = LyricsData(
+            trackTitle: "Je te laisserai des mots",
+            artistName: "Patrick Watson",
+            lines: [line1],
+            isWordSynced: true
+        )
+        
+        let expectation = self.expectation(description: "LyricsTranslator Async")
+        
+        LyricsTranslator.shared.translateAsync(
+            lyrics: lyricsData,
+            targetLanguage: "en",
+            generation: 1
+        ) { translated in
+            XCTAssertEqual(translated.lines.count, 1)
+            XCTAssertNotNil(translated.lines[0].translation)
+            expectation.fulfill()
+        }
+        
+        wait(for: [expectation], timeout: 5.0)
+    }
 }
